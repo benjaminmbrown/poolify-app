@@ -160,7 +160,7 @@ export default function DashboardPage() {
           </div>
 
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <a href="/" style={primaryButton}>
+            <a href="/start" style={primaryButton}>
               Create New Gallery
             </a>
             <a href="/buy-credits" style={secondaryButton}>
@@ -182,7 +182,7 @@ export default function DashboardPage() {
                 photo to see your first set of AI pool designs.
               </p>
               <div style={{ marginTop: 12 }}>
-                <a href="/" style={primaryButtonSmall}>
+                <a href="/start" style={primaryButtonSmall}>
                   Create your first gallery
                 </a>
               </div>

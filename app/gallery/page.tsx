@@ -1,5 +1,5 @@
 // GalleryPage.tsx
-"use client"
+"use client";
 import * as React from "react";
 import { useAuth } from "@/components/AuthContext";
 const API_BASE = "https://poolify-backend-production.up.railway.app";
@@ -332,9 +332,10 @@ url:   ${debugUrl ?? "null"}`}
             alignItems: "flex-end",
           }}
         >
-          <a href="/" style={primaryButtonStyle}>
+          <a href="/start" style={primaryButtonStyle}>
             Create New Gallery
           </a>
+
           <a
             href="/dashboard"
             style={{
@@ -364,7 +365,7 @@ url:   ${debugUrl ?? "null"}`}
       )}
 
       {/* Images */}
-           {/* Images */}
+      {/* Images */}
       <section>
         {images.length === 0 ? (
           <div style={cardStyle}>
@@ -380,7 +381,6 @@ url:   ${debugUrl ?? "null"}`}
             </div>
           </div>
         ) : (
-
           <div style={gridStyle}>
             {images.map((img, index) => (
               <figure
@@ -694,7 +694,7 @@ const headerRowStyle: React.CSSProperties = {
   gap: 16,
   flexWrap: "wrap",
   marginBottom: 24,
-}
+};
 
 const cardStyle: React.CSSProperties = {
   padding: 18,
