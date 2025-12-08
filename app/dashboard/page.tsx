@@ -178,12 +178,12 @@ export default function DashboardPage() {
           {jobs.length === 0 ? (
             <div style={cardStyle}>
               <p style={mutedTextStyle}>
-                You don&apos;t have any galleries yet. Start by submitting a
+                You don&apos;t have any pool designs yet. Start by submitting a
                 photo to see your first set of AI pool designs.
               </p>
               <div style={{ marginTop: 12 }}>
                 <a href="/start" style={primaryButtonSmall}>
-                  Create your first gallery
+                  Upload your first photo & see designs
                 </a>
               </div>
             </div>
