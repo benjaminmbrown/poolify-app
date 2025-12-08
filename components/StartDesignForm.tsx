@@ -1,10 +1,14 @@
-// src/components/StartDesignForm.tsx
-"use client"
+"use client";
 
-import * as React from "react"
-import { useAuth } from "@/components/AuthContext"
+import * as React from "react";
+import { useAuth } from "@/components/AuthContext";
+import { useCredits } from "@/hooks/useCredits";
 
-type Status = "idle" | "submitting" | "success" | "error"
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_BASE ||
+  "https://poolify-backend-production.up.railway.app";
+
+type Status = "idle" | "submitting" | "success" | "error";
 
 const STYLE_OPTIONS = [
   "Modern",
@@ -14,285 +18,231 @@ const STYLE_OPTIONS = [
   "Traditional",
   "Luxury",
   "Mediterranean",
-  "Other",
-]
+] as const;
 
 export default function StartDesignForm() {
-  const auth = useAuth()
-  const userId = auth?.userId || null
-  const authEmail = auth?.email || ""
+  const auth = useAuth();
+  const userId = auth?.userId || null;
+  const authEmail = auth?.email || "";
+  const authUser: any = auth?.user || null;
 
-  const [name, setName] = React.useState("")
-  const [email, setEmail] = React.useState(authEmail)
-  const [zip, setZip] = React.useState("")
+  const authNameFromMeta =
+    authUser?.user_metadata?.full_name || authUser?.user_metadata?.name || "";
 
-  const [stylesSelected, setStylesSelected] = React.useState<string[]>([])
-  const [styleOtherText, setStyleOtherText] = React.useState("")
+  const [name, setName] = React.useState(authNameFromMeta || "");
+  const [email, setEmail] = React.useState(authEmail);
+  const [zip, setZip] = React.useState("");
 
-  const [styleIntensity, setStyleIntensity] = React.useState<number | null>(
-    null
-  )
-  const [budgetIntensity, setBudgetIntensity] = React.useState<number | null>(
-    null
-  )
-  const [numDesigns, setNumDesigns] = React.useState<number | null>(null)
+  const [styleChoice, setStyleChoice] = React.useState<string>("");
+  const [styleOther, setStyleOther] = React.useState("");
 
-  const [features, setFeatures] = React.useState("") // optional extra notes
+  const [intensity, setIntensity] = React.useState<string>("5"); // 1–10
+  const [budget, setBudget] = React.useState<string>("5"); // 1–10
+  const [numVariants, setNumVariants] = React.useState<string>("3"); // default
 
-  const [file, setFile] = React.useState<File | null>(null)
+  const [file, setFile] = React.useState<File | null>(null);
 
-  const [status, setStatus] = React.useState<Status>("idle")
-  const [errorMessage, setErrorMessage] = React.useState<string | null>(null)
-  const [galleryUrl, setGalleryUrl] = React.useState<string | null>(null)
+  const [status, setStatus] = React.useState<Status>("idle");
+  const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
+  const [galleryUrl, setGalleryUrl] = React.useState<string | null>(null);
+  // track if the user has manually edited these so we don't overwrite
+  const [emailTouched, setEmailTouched] = React.useState(false);
+  const [nameTouched, setNameTouched] = React.useState(false);
+
+  const {
+    credits,
+    loading: creditsLoading,
+    error: creditsError,
+  } = useCredits();
+  const noCredits = userId && credits !== null && credits <= 0;
+
+  React.useEffect(() => {
+    // if user logs in later, prefill email if user hasn't typed yet
+    if (authEmail && !emailTouched) {
+      setEmail(authEmail);
+    }
+
+    if (authNameFromMeta && !nameTouched) {
+      setName(authNameFromMeta);
+    }
+  }, [authEmail, authNameFromMeta, emailTouched, nameTouched]);
+
+  React.useEffect(() => {
+    if (credits === null) return; // not logged in or not loaded yet
+
+    if (credits <= 0) {
+      setNumVariants("0");
+      return;
+    }
+
+    const current = parseInt(numVariants || "0", 10);
+    if (!current || current > credits) {
+      // default to min(3, credits)
+      const safeDefault = Math.min(credits, 3);
+      setNumVariants(String(safeDefault));
+    }
+  }, [credits]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0] || null
-    setFile(f)
-  }
-
-  const toggleStyle = (option: string) => {
-    setStylesSelected((prev) => {
-      if (prev.includes(option)) {
-        return prev.filter((v) => v !== option)
-      }
-      return [...prev, option]
-    })
-  }
+    const f = e.target.files?.[0] || null;
+    setFile(f);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setStatus("submitting")
-    setErrorMessage(null)
-    setGalleryUrl(null)
+    e.preventDefault();
+    setStatus("submitting");
+    setErrorMessage(null);
+    setGalleryUrl(null);
 
-    // Basic validation to mirror Tally's "required" behavior
     if (!email.trim()) {
-      setStatus("error")
-      setErrorMessage("Please enter an email address.")
-      return
+      setStatus("error");
+      setErrorMessage("Please enter an email address.");
+      return;
     }
 
     if (!file) {
-      setStatus("error")
-      setErrorMessage("Please upload a photo of your backyard.")
-      return
+      setStatus("error");
+      setErrorMessage("Please upload a photo of your backyard.");
+      return;
     }
 
-    if (!stylesSelected.length) {
-      setStatus("error")
-      setErrorMessage("Please choose at least one pool style.")
-      return
+    const requested = parseInt(numVariants || "0", 10) || 0;
+    if (userId) {
+      if (noCredits) {
+        setStatus("error");
+        setErrorMessage(
+          "You don't have any credits available. Please buy credits before creating a new gallery."
+        );
+        return;
+      }
+
+      if (!requested) {
+        setStatus("error");
+        setErrorMessage("Please choose how many designs you want.");
+        return;
+      }
+
+      if (credits !== null && requested > credits) {
+        setStatus("error");
+        setErrorMessage(
+          `You only have ${credits} credits but requested ${requested} designs. Please reduce the number of designs or buy more credits.`
+        );
+        return;
+      }
+    } else {
+      if (!requested) {
+        setStatus("error");
+        setErrorMessage("Please choose how many designs you want.");
+        return;
+      }
     }
 
-    if (styleIntensity === null) {
-      setStatus("error")
-      setErrorMessage("Please choose a style intensity (1–10).")
-      return
-    }
-
-    if (budgetIntensity === null) {
-      setStatus("error")
-      setErrorMessage("Please choose a budget intensity (1–10).")
-      return
-    }
-
-    if (numDesigns === null) {
-      setStatus("error")
-      setErrorMessage("Please choose how many designs you want.")
-      return
+    // Work out the final style value:
+    // - If "Other" is chosen and text is provided, send the text (custom style)
+    // - Otherwise send the preset label (e.g. "Modern")
+    let styleValue = styleChoice;
+    if (styleChoice === "Other" && styleOther.trim()) {
+      styleValue = styleOther.trim();
     }
 
     try {
-      // Build style string similar to how your backend likely stores it
-      const baseStyles = stylesSelected.filter((s) => s !== "Other")
-      const styleParts = [...baseStyles]
+      const formData = new FormData();
+      if (userId) formData.append("user_id", userId);
+      formData.append("email", email.trim());
+      if (name.trim()) formData.append("name", name.trim());
+      if (zip.trim()) formData.append("zip", zip.trim());
 
-      if (stylesSelected.includes("Other") && styleOtherText.trim()) {
-        styleParts.push(`custom: ${styleOtherText.trim()}`)
+      if (styleChoice) {
+        formData.append(
+          "style",
+          styleChoice === "Other" ? "Other" : styleChoice
+        );
+      }
+      if (styleChoice === "Other" && styleOther.trim()) {
+        formData.append("style_other", styleOther.trim());
+      } else if (styleChoice !== "Other" && styleValue) {
+        // For safety, also send the resolved style text
+        formData.append("style_other", styleValue);
       }
 
-      const styleString = styleParts.join(", ")
+      if (intensity) formData.append("intensity", intensity);
+      if (budget) formData.append("budget", budget);
+      const requested = parseInt(numVariants || "0", 10) || 0;
+      formData.append("num_variants", String(requested));
 
-      const formData = new FormData()
-      if (userId) formData.append("user_id", userId)
-      formData.append("email", email.trim())
-      if (name.trim()) formData.append("customer_name", name.trim())
-      if (zip.trim()) formData.append("zip", zip.trim())
-
-      formData.append("style", styleString)
-      formData.append("style_intensity", String(styleIntensity))
-      formData.append("budget_intensity", String(budgetIntensity))
-      formData.append("num_designs", String(numDesigns))
-
-      if (features.trim()) formData.append("features", features.trim())
-
-      formData.append("job_type", "initial")
-      formData.append("file", file)
+      formData.append("file", file);
 
       const res = await fetch("/api/jobs/create", {
         method: "POST",
         body: formData,
-      })
+      });
 
-      let json: any = null
+      let json: any = null;
       try {
-        json = await res.json()
+        json = await res.json();
       } catch {
-        // ignore non-JSON
+        // non-JSON response; ignore
       }
 
       if (!res.ok) {
-        throw new Error(json?.error || res.statusText || "Failed to create job.")
+        throw new Error(
+          json?.error || res.statusText || "Failed to create job."
+        );
       }
 
       if (json?.gallery_url) {
-        setGalleryUrl(json.gallery_url)
+        setGalleryUrl(json.gallery_url);
       }
 
-      setStatus("success")
+      setStatus("success");
     } catch (err: any) {
-      console.error("StartDesignForm submit error:", err)
-      setErrorMessage(err?.message || "Something went wrong. Please try again.")
-      setStatus("error")
+      console.error("StartDesignForm submit error:", err);
+      setErrorMessage(
+        err?.message || "Something went wrong. Please try again."
+      );
+      setStatus("error");
     }
-  }
+  };
 
-  const disabled = status === "submitting"
+  const disabled = status === "submitting" || noCredits;
 
   return (
     <form onSubmit={handleSubmit} style={formStyle}>
-      <h2 style={{ marginTop: 0, marginBottom: 8 }}>Poolify Pool Design Request</h2>
+      <h2 style={{ marginTop: 0, marginBottom: 8 }}>Start a new pool design</h2>
       <p style={helperTextStyle}>
-        Upload one clear photo of your backyard and tell us how bold you want us
-        to go. We&apos;ll email you a gallery of AI pool designs.
+        Upload a photo of your backyard and choose your style, intensity, and
+        budget. We&apos;ll generate a gallery of pool ideas and email you the
+        link when they&apos;re ready.
       </p>
 
-      {/* Name */}
       <div style={fieldGroupStyle}>
         <label style={labelStyle}>What&apos;s your name?</label>
         <input
           style={inputStyle}
           value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="ben"
+          onChange={(e) => {
+            setNameTouched(true);
+            setName(e.target.value);
+          }}
+          placeholder="Optional"
         />
       </div>
 
-      {/* Email */}
       <div style={fieldGroupStyle}>
         <label style={labelStyle}>What&apos;s your email?</label>
         <input
           style={inputStyle}
           type="email"
           value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          onChange={(e) => {
+            setEmailTouched(true);
+            setEmail(e.target.value);
+          }}
           placeholder="you@example.com"
           required
         />
       </div>
 
-      {/* Backyard photo */}
-      <div style={fieldGroupStyle}>
-        <label style={labelStyle}>Upload one clear photo of your backyard</label>
-        <input
-          style={fileInputStyle}
-          type="file"
-          accept="image/*"
-          onChange={handleFileChange}
-          required
-        />
-        <p style={{ fontSize: 11, opacity: 0.7, marginTop: 4 }}>
-          One photo is perfect. Make sure your yard and any existing patio or
-          structures are visible.
-        </p>
-      </div>
-
-      {/* Styles (checkboxes) */}
-      <div style={fieldGroupStyle}>
-        <label style={labelStyle}>Which styles of pool do you prefer?</label>
-        <div style={chipWrapStyle}>
-          {STYLE_OPTIONS.map((opt) => {
-            const checked = stylesSelected.includes(opt)
-            return (
-              <label
-                key={opt}
-                style={{
-                  ...chipStyle,
-                  borderColor: checked
-                    ? "rgba(61,255,179,0.9)"
-                    : "rgba(255,255,255,0.2)",
-                  background: checked ? "rgba(61,255,179,0.1)" : "transparent",
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={checked}
-                  onChange={() => toggleStyle(opt)}
-                  style={{ marginRight: 6 }}
-                />
-                {opt}
-              </label>
-            )
-          })}
-        </div>
-        {stylesSelected.includes("Other") && (
-          <input
-            style={{ ...inputStyle, marginTop: 8 }}
-            value={styleOtherText}
-            onChange={(e) => setStyleOtherText(e.target.value)}
-            placeholder='For example: "Palm Springs mid-century desert modern with warm neutrals"'
-          />
-        )}
-      </div>
-
-      {/* Style Intensity (1–10) */}
-      <div style={fieldGroupStyle}>
-        <label style={labelStyle}>Style Intensity</label>
-        <p style={helperTextStyle}>
-          1 = stripped-down results in the style you selected. 10 = maximum
-          intensity of that style. 5 is normal.
-        </p>
-        <div style={scaleRowStyle}>
-          {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
-            <label key={n} style={scaleLabelStyle}>
-              <input
-                type="radio"
-                name="style_intensity"
-                value={n}
-                checked={styleIntensity === n}
-                onChange={() => setStyleIntensity(n)}
-              />
-              <span>{n}</span>
-            </label>
-          ))}
-        </div>
-      </div>
-
-      {/* Budget Intensity (1–10) */}
-      <div style={fieldGroupStyle}>
-        <label style={labelStyle}>Budget Intensity</label>
-        <p style={helperTextStyle}>
-          This helps us suggest ideas that fit your comfort zone. 1 = minimum
-          budget ideas. 10 = &quot;billionaire&apos;s finish.&quot; 5 is
-          standard.
-        </p>
-        <div style={scaleRowStyle}>
-          {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
-            <label key={n} style={scaleLabelStyle}>
-              <input
-                type="radio"
-                name="budget_intensity"
-                value={n}
-                checked={budgetIntensity === n}
-                onChange={() => setBudgetIntensity(n)}
-              />
-              <span>{n}</span>
-            </label>
-          ))}
-        </div>
-      </div>
-
-      {/* Zip */}
       <div style={fieldGroupStyle}>
         <label style={labelStyle}>What&apos;s your zipcode?</label>
         <input
@@ -303,40 +253,174 @@ export default function StartDesignForm() {
         />
       </div>
 
-      {/* How many designs (1–60, to mirror Tally) */}
-      <div style={fieldGroupStyle}>
-        <label style={labelStyle}>How many designs do you want?</label>
-        <p style={helperTextStyle}>
-          Each standard design costs 1 credit. You currently have credits
-          visible in your dashboard.
-        </p>
-        <select
-          style={inputStyle}
-          value={numDesigns ?? ""}
-          onChange={(e) =>
-            setNumDesigns(e.target.value ? Number(e.target.value) : null)
-          }
-        >
-          <option value="">Select a number</option>
-          {Array.from({ length: 60 }, (_, i) => i + 1).map((n) => (
-            <option key={n} value={n}>
-              {n}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* Optional extra notes / must-have features */}
       <div style={fieldGroupStyle}>
         <label style={labelStyle}>
-          Anything else we should know? (optional)
+          Upload one clear photo of your backyard. <br/>
+          Note: Ensure the ENTIRE area where you want to place pool is visible in the photo.
         </label>
-        <textarea
-          style={{ ...inputStyle, minHeight: 80, resize: "vertical" }}
-          value={features}
-          onChange={(e) => setFeatures(e.target.value)}
-          placeholder="Must-have features, concerns, or extra context."
+        <input
+          style={fileInputStyle}
+          type="file"
+          accept="image/*"
+          onChange={handleFileChange}
+          required
         />
+      </div>
+
+      <div style={fieldGroupStyle}>
+        <label style={labelStyle}>Which styles of pool do you prefer?</label>
+        <div style={chipRowStyle}>
+          {STYLE_OPTIONS.map((opt) => (
+            <button
+              key={opt}
+              type="button"
+              onClick={() => setStyleChoice(opt)}
+              style={{
+                ...chipButtonStyle,
+                ...(styleChoice === opt ? chipButtonActiveStyle : {}),
+              }}
+            >
+              {opt}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => setStyleChoice("Other")}
+            style={{
+              ...chipButtonStyle,
+              ...(styleChoice === "Other" ? chipButtonActiveStyle : {}),
+            }}
+          >
+            Other
+          </button>
+        </div>
+        {styleChoice === "Other" && (
+          <input
+            style={{ ...inputStyle, marginTop: 8 }}
+            value={styleOther}
+            onChange={(e) => setStyleOther(e.target.value)}
+            placeholder='Example: "Palm Springs mid-century desert modern with warm neutrals"'
+          />
+        )}
+      </div>
+
+      <div style={fieldGroupStyle}>
+        <label style={labelStyle}>Style Intensity (1–10)</label>
+        <div style={chipRowStyle}>
+          {Array.from({ length: 10 }, (_, i) => `${i + 1}`).map((val) => (
+            <button
+              key={val}
+              type="button"
+              onClick={() => setIntensity(val)}
+              style={{
+                ...chipButtonStyle,
+                ...(intensity === val ? chipButtonActiveStyle : {}),
+              }}
+            >
+              {val}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div style={fieldGroupStyle}>
+        <label style={labelStyle}>Budget Intensity (1–10)</label>
+        <div style={chipRowStyle}>
+          {Array.from({ length: 10 }, (_, i) => `${i + 1}`).map((val) => (
+            <button
+              key={val}
+              type="button"
+              onClick={() => setBudget(val)}
+              style={{
+                ...chipButtonStyle,
+                ...(budget === val ? chipButtonActiveStyle : {}),
+              }}
+            >
+              {val}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div style={fieldGroupStyle}>
+        <label style={labelStyle}>How many designs do you want?</label>
+
+        {creditsLoading && userId && (
+          <p style={{ fontSize: 12, opacity: 0.8, marginBottom: 6 }}>
+            Checking your available credits…
+          </p>
+        )}
+
+        {creditsError && userId && (
+          <p style={{ fontSize: 12, color: "#ffb0b0", marginBottom: 6 }}>
+            Could not load your credits. You can still try submitting, but if
+            you request more designs than you have credits, the job will fail.
+          </p>
+        )}
+
+        {noCredits ? (
+          <>
+            <p style={{ fontSize: 13, opacity: 0.85, marginBottom: 8 }}>
+              You currently have <strong>0 credits</strong>. Please add credits
+              before creating a new gallery.
+            </p>
+            <a
+              href="/buy-credits"
+              style={{
+                display: "inline-block",
+                padding: "8px 14px",
+                borderRadius: 999,
+                border: "none",
+                background: "linear-gradient(135deg,#27b3ff,#3dffb3)",
+                color: "#000",
+                fontWeight: 600,
+                textDecoration: "none",
+                fontSize: 14,
+              }}
+            >
+              Buy credits
+            </a>
+          </>
+        ) : (
+          <>
+            {credits !== null && credits > 0 && (
+              <p style={{ fontSize: 12, opacity: 0.8, marginBottom: 6 }}>
+                You currently have <strong>{credits}</strong> credits. You can
+                request up to <strong>{credits}</strong> designs for this
+                gallery.
+              </p>
+            )}
+
+            {(() => {
+              const maxDesigns =
+                credits !== null && credits > 0
+                  ? Math.min(credits, 20) // cap chips at 20 for UI sanity
+                  : 12; // fallback if not logged in / no credits info
+
+              const options = Array.from({ length: maxDesigns }, (_, i) =>
+                String(i + 1)
+              );
+
+              return (
+                <div style={chipRowStyle}>
+                  {options.map((val) => (
+                    <button
+                      key={val}
+                      type="button"
+                      onClick={() => setNumVariants(val)}
+                      style={{
+                        ...chipButtonStyle,
+                        ...(numVariants === val ? chipButtonActiveStyle : {}),
+                      }}
+                    >
+                      {val}
+                    </button>
+                  ))}
+                </div>
+              );
+            })()}
+          </>
+        )}
       </div>
 
       {errorMessage && (
@@ -351,17 +435,29 @@ export default function StartDesignForm() {
             Got it! Your design request is in the queue. We&apos;ll email you a
             gallery link as soon as your pool ideas are ready.
           </p>
-          {galleryUrl && (
-            <p style={{ margin: 0, fontSize: 12, marginTop: 4 }}>
-              You can also bookmark this link:{" "}
-              <a
-                href={galleryUrl}
-                style={{ color: "#3dffb3", textDecoration: "underline" }}
-              >
-                Open gallery
-              </a>
-            </p>
-          )}
+          {galleryUrl &&
+            (() => {
+              // extract token from backend URL
+              const url = new URL(galleryUrl);
+              const token = url.searchParams.get("token");
+
+              // fallback: if no token, use backend URL anyway
+              const appGalleryUrl = token
+                ? `/gallery?token=${encodeURIComponent(token)}`
+                : galleryUrl;
+
+              return (
+                <p style={{ margin: 0, fontSize: 12, marginTop: 4 }}>
+                  You can also bookmark this link:{" "}
+                  <a
+                    href={appGalleryUrl}
+                    style={{ color: "#3dffb3", textDecoration: "underline" }}
+                  >
+                    Open gallery
+                  </a>
+                </p>
+              );
+            })()}
         </div>
       )}
 
@@ -369,7 +465,7 @@ export default function StartDesignForm() {
         {status === "submitting" ? "Submitting…" : "Create my gallery"}
       </button>
     </form>
-  )
+  );
 }
 
 /* Styles */
@@ -381,18 +477,18 @@ const formStyle: React.CSSProperties = {
   background: "rgba(0,0,0,0.35)",
   maxWidth: 520,
   width: "100%",
-}
+};
 
 const fieldGroupStyle: React.CSSProperties = {
-  marginBottom: 12,
-}
+  marginBottom: 14,
+};
 
 const labelStyle: React.CSSProperties = {
   display: "block",
   marginBottom: 4,
   fontSize: 13,
   opacity: 0.9,
-}
+};
 
 const inputStyle: React.CSSProperties = {
   width: "100%",
@@ -403,18 +499,18 @@ const inputStyle: React.CSSProperties = {
   color: "white",
   fontSize: 14,
   outline: "none",
-}
+};
 
 const fileInputStyle: React.CSSProperties = {
   ...inputStyle,
   padding: "6px 8px",
-}
+};
 
 const helperTextStyle: React.CSSProperties = {
-  fontSize: 12,
+  fontSize: 13,
   opacity: 0.8,
-  marginBottom: 6,
-}
+  marginBottom: 12,
+};
 
 const submitButtonStyle: React.CSSProperties = {
   marginTop: 8,
@@ -427,7 +523,7 @@ const submitButtonStyle: React.CSSProperties = {
   cursor: "pointer",
   fontSize: 14,
   width: "100%",
-}
+};
 
 const successBoxStyle: React.CSSProperties = {
   marginTop: 8,
@@ -436,36 +532,26 @@ const successBoxStyle: React.CSSProperties = {
   borderRadius: 12,
   background: "rgba(0,80,30,0.6)",
   border: "1px solid rgba(61,255,179,0.5)",
-}
+};
 
-const chipWrapStyle: React.CSSProperties = {
+const chipRowStyle: React.CSSProperties = {
   display: "flex",
   flexWrap: "wrap",
-  gap: 8,
-}
+  gap: 6,
+};
 
-const chipStyle: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  padding: "4px 8px",
+const chipButtonStyle: React.CSSProperties = {
+  padding: "4px 10px",
   borderRadius: 999,
   border: "1px solid rgba(255,255,255,0.2)",
+  background: "rgba(0,0,0,0.4)",
+  color: "white",
   fontSize: 12,
   cursor: "pointer",
-}
+};
 
-const scaleRowStyle: React.CSSProperties = {
-  display: "flex",
-  flexWrap: "wrap",
-  gap: 4,
-}
-
-const scaleLabelStyle: React.CSSProperties = {
-  display: "inline-flex",
-  flexDirection: "column",
-  alignItems: "center",
-  fontSize: 11,
-  padding: "4px 6px",
-  borderRadius: 8,
-  border: "1px solid rgba(255,255,255,0.2)",
-}
+const chipButtonActiveStyle: React.CSSProperties = {
+  border: "none",
+  background: "linear-gradient(135deg,#27b3ff,#3dffb3)",
+  color: "#000",
+};

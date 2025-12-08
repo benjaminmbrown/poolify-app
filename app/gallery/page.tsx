@@ -2,6 +2,7 @@
 "use client";
 import * as React from "react";
 import { useAuth } from "@/components/AuthContext";
+import { useCredits } from "@/hooks/useCredits";
 const API_BASE = "https://poolify-backend-production.up.railway.app";
 
 type Job = {
@@ -27,10 +28,15 @@ type Job = {
 type JobImage = {
   id: string;
   job_id: string;
+
+  // Full-resolution image
   image_url: string;
+
+  // 🔹 NEW: low-res thumbnail URL (optional so it won't break existing data)
+  thumbnail_url?: string | null;
+
   created_at?: string | null;
 };
-
 type GalleryResponse = {
   job: Job | null;
   images: JobImage[];
@@ -80,9 +86,24 @@ export default function GalleryPage() {
   const [variantMessage, setVariantMessage] = React.useState<string | null>(
     null
   );
+
+  const [downloadBusyImageId, setDownloadBusyImageId] = React.useState<
+    string | null
+  >(null);
+  const [downloadError, setDownloadError] = React.useState<string | null>(null);
+  const [downloadInsufficient, setDownloadInsufficient] =
+    React.useState<InsufficientCreditsInfo | null>(null);
+
   const [variantError, setVariantError] = React.useState<string | null>(null);
   const [insufficientCredits, setInsufficientCredits] =
     React.useState<InsufficientCreditsInfo | null>(null);
+
+  // ➕ ADD THIS
+  const {
+    credits,
+    loading: creditsLoading,
+    error: creditsError,
+  } = useCredits();
 
   React.useEffect(() => {
     const token = getGalleryTokenFromUrl();
@@ -119,6 +140,25 @@ export default function GalleryPage() {
         setLoading(false);
       });
   }, []);
+
+  async function trackEvent(
+    eventType: string,
+    metadata: Record<string, any> = {}
+  ) {
+    try {
+      await fetch(`${API_BASE}/analytics/event`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          event_type: eventType,
+          metadata,
+          user_id: authUserId ?? null,
+        }),
+      });
+    } catch (err) {
+      console.log("Analytics failed:", err);
+    }
+  }
 
   // While auth is loading, we still let them VIEW the gallery.
   // Actions (variants/credits) are gated below.
@@ -161,17 +201,98 @@ url:   ${debugUrl ?? "null"}`}
     (!job?.email || job.email.toLowerCase() === authEmail.toLowerCase());
 
   const handleOpenFullscreen = (img: JobImage) => {
+    trackEvent("open_fullscreen_image", {
+      image_id: img.id,
+      job_id: img.job_id,
+    });
     setFullscreenImage(img);
   };
 
-  const handleDownload = (img: JobImage) => {
-    if (typeof window === "undefined" || !img.image_url) return;
-    const a = document.createElement("a");
-    a.href = img.image_url;
-    a.download = "poolify-design.jpg";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+  const handleDownload = async (img: JobImage) => {
+    trackEvent("click_download", {
+      image_id: img.id,
+      job_id: img.job_id,
+    });
+
+    if (!job || !job.id) {
+      setDownloadError("Missing job information for this download.");
+      return;
+    }
+    if (!authUserId) {
+      setDownloadError(
+        "Please log in to your Poolify account to download designs."
+      );
+      return;
+    }
+    if (!img.id) {
+      setDownloadError("Missing image ID for this design.");
+      return;
+    }
+
+    setDownloadError(null);
+    setDownloadInsufficient(null);
+    setDownloadBusyImageId(img.id);
+
+    try {
+      const res = await fetch(`${API_BASE}/jobs/${job.id}/download-image`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          user_id: authUserId,
+          image_id: img.id,
+        }),
+      });
+
+      const json = await res.json().catch(() => null);
+
+      if (res.status === 402 && json?.error === "insufficient_credits") {
+        trackEvent("download_insufficient_credits", {
+          image_id: img.id,
+          job_id: img.job_id,
+        });
+
+        setDownloadInsufficient({
+          error: "insufficient_credits",
+          needed: json.needed,
+          remaining: json.remaining,
+        });
+        setDownloadError(
+          "You’ve used your free downloads for this project and don’t have enough credits."
+        );
+        return;
+      }
+
+      if (!res.ok) {
+        throw new Error(json?.error || `HTTP ${res.status} ${res.statusText}`);
+      }
+
+      const url = json?.download_url;
+      if (!url) {
+        throw new Error("Download URL was not returned by the server.");
+      }
+
+      if (typeof window !== "undefined") {
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "poolify-design.jpg";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        trackEvent("download_success", {
+          image_id: img.id,
+          job_id: img.job_id,
+        });
+      }
+    } catch (e: any) {
+      console.error("Download error:", e);
+      setDownloadError(
+        e?.message || "Something went wrong while downloading this design."
+      );
+    } finally {
+      setDownloadBusyImageId(null);
+    }
   };
 
   const openVariantModal = (img: JobImage) => {
@@ -307,9 +428,9 @@ url:   ${debugUrl ?? "null"}`}
   return (
     <div style={pageStyle}>
       {/* Header */}
-      {/* Header */}
+
       <header style={headerRowStyle}>
-        <div>
+        <div style={{ maxWidth: "min(640px, 100%)" }}>
           <h1 style={h1Style}>{title}</h1>
           <p style={mutedStyle}>
             These designs were generated from your photo and preferences. Save
@@ -318,36 +439,71 @@ url:   ${debugUrl ?? "null"}`}
           </p>
           {!authLoading && !authUserId && (
             <p style={{ fontSize: 13, opacity: 0.8, marginTop: 4 }}>
-              To generate more designs or buy credits, please create an account
-              or log in below, then start a new project.
+              To generate more designs or credits, please create an account or
+              log in on the main page.
+            </p>
+          )}
+
+          {/* 🔹 New: credits notice + Get more credits link */}
+          {!authLoading && authUserId && typeof credits === "number" && (
+            <p
+              style={{
+                fontSize: 13,
+                marginTop: 8,
+              }}
+            >
+              Available credits: <strong>{credits}</strong>{" "}
+              <a
+                href="/buy-credits"
+                onClick={() => trackEvent("click_get_more_credits", {})}
+                style={{
+                  marginLeft: 8,
+                  textDecoration: "underline",
+                }}
+              >
+                Get more credits
+              </a>
             </p>
           )}
         </div>
 
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: 8,
-            alignItems: "flex-end",
-          }}
-        >
-          <a href="/start" style={primaryButtonStyle}>
-            Create New Gallery
+        <div style={headerActionsStyle}>
+          <a href="/buy-credits" style={buyCreditsButtonStyle}>
+            Get credits
           </a>
-
           <a
-            href="/dashboard"
-            style={{
-              ...secondaryButtonStyle,
-              fontSize: 12,
-              padding: "6px 10px",
-            }}
+            href="/start"
+            onClick={() => trackEvent("click_create_new_gallery", {})}
+            style={{ fontSize: 13, textDecoration: "underline" }}
           >
-            Go to Dashboard
+            Create new gallery
           </a>
+          <a href="/dashboard">Dashboard</a>
         </div>
       </header>
+
+      {/* ✅ Original backyard reference */}
+      {job?.input_image_url && (
+        <section style={originalCardStyle}>
+          <div style={originalImageWrapperStyle}>
+            <img
+              src={job.input_image_url}
+              alt="Original backyard"
+              style={originalImageStyle}
+            />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13, opacity: 0.8, marginBottom: 4 }}>
+              Original backyard photo
+            </div>
+            <p style={{ fontSize: 12, opacity: 0.7, margin: 0 }}>
+              This is the photo you uploaded. The designs below are based on
+              this space. Use it as a reference when comparing layouts,
+              features, and angles.
+            </p>
+          </div>
+        </section>
+      )}
 
       {/* Job meta card */}
       {job && (
@@ -371,8 +527,8 @@ url:   ${debugUrl ?? "null"}`}
           <div style={cardStyle}>
             <strong>No images found.</strong>
             <p style={mutedStyle}>
-              If this seems wrong, reply to your Poolify email and we’ll take a
-              look.
+              Your images may still be processing. It takes a few seconds per
+              image, so watch your email for notification when they're ready.
             </p>
             <div style={{ marginTop: 12 }}>
               <a href="/" style={primaryButtonStyle}>
@@ -387,11 +543,22 @@ url:   ${debugUrl ?? "null"}`}
                 key={img.id ?? `${img.job_id}-${index}`}
                 style={imgCardStyle}
               >
-                <img
-                  src={img.image_url}
-                  alt={`Pool design ${index + 1}`}
-                  style={imgStyle}
-                />
+                <div style={thumbnailWrapperStyle}>
+                  <img
+                    // 🔹 Serve low-res first, fallback to full-res
+                    src={img.thumbnail_url || img.image_url}
+                    alt={`Pool design ${index + 1}`}
+                    style={imgStyle}
+                    onContextMenu={(e) => e.preventDefault()}
+                    draggable={false}
+                  />
+                  {/* Transparent overlay to block direct "Save image as" on the <img> */}
+                  <div
+                    style={thumbnailOverlayStyle}
+                    onContextMenu={(e) => e.preventDefault()}
+                  />
+                </div>
+
                 <figcaption style={captionStyle}>
                   <div
                     style={{
@@ -419,8 +586,11 @@ url:   ${debugUrl ?? "null"}`}
                       <button
                         style={smallButtonStyle}
                         onClick={() => handleDownload(img)}
+                        disabled={downloadBusyImageId === img.id}
                       >
-                        Download
+                        {downloadBusyImageId === img.id
+                          ? "Downloading…"
+                          : "Download"}
                       </button>
                       {canRequestVariants ? (
                         <button
@@ -449,6 +619,63 @@ url:   ${debugUrl ?? "null"}`}
         )}
       </section>
 
+      {/* Download error / upsell block */}
+      {(downloadError || downloadInsufficient) && (
+        <section style={{ ...cardStyle, marginTop: 16 }}>
+          {downloadError && (
+            <p
+              style={{
+                margin: 0,
+                fontSize: 13,
+                color: "#ffb0b0",
+              }}
+            >
+              {downloadError}
+            </p>
+          )}
+
+          {downloadInsufficient && authUserId && (
+            <div style={{ marginTop: 8, fontSize: 13 }}>
+              <p style={{ marginBottom: 6 }}>
+                You need <strong>{downloadInsufficient.needed}</strong> credits
+                but only have <strong>{downloadInsufficient.remaining}</strong>.
+              </p>
+              <p style={{ marginBottom: 6 }}>Add credits to your account:</p>
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: 8,
+                }}
+              >
+                {CREDIT_PACKS.map((pack) => (
+                  <button
+                    key={pack.priceId}
+                    style={secondaryButtonStyle}
+                    onClick={() => startCreditsCheckout(pack.priceId)}
+                  >
+                    {pack.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {downloadInsufficient && !authUserId && (
+            <p
+              style={{
+                marginTop: 8,
+                fontSize: 12,
+                opacity: 0.8,
+              }}
+            >
+              Log in or create a Poolify account to purchase credits and
+              download more designs.
+            </p>
+          )}
+        </section>
+      )}
+
       {/* Debug footer – leave for now, can be removed later */}
       <footer style={debugFooterStyle}>
         <div>
@@ -468,23 +695,70 @@ images: ${images.length}`}
             <img
               src={fullscreenImage.image_url}
               alt="Full size pool design"
+              onContextMenu={(e) => e.preventDefault()}
+              draggable={false}
               style={{
                 maxWidth: "100%",
                 maxHeight: "80vh",
                 display: "block",
                 borderRadius: 16,
+                marginBottom: 12,
               }}
             />
-            <button
+
+            {/* Credits info + Get more credits link */}
+            <p
               style={{
-                ...primaryButtonStyle,
-                marginTop: 16,
-                width: "100%",
+                fontSize: 12,
+                opacity: 0.8,
+                margin: "0 0 10px",
               }}
-              onClick={() => setFullscreenImage(null)}
             >
-              Close
-            </button>
+              Downloads cost <strong>1 credit</strong>
+              {typeof credits === "number" && (
+                <>
+                  {" "}
+                  · You currently have <strong>{credits}</strong> credits.{" "}
+                </>
+              )}
+              <a
+                href="/buy-credits"
+                style={{
+                  color: "#3dffb3",
+                  textDecoration: "underline",
+                  fontWeight: 500,
+                  marginLeft: 4,
+                }}
+              >
+                Get more credits
+              </a>
+            </p>
+
+            <div
+              style={{
+                display: "flex",
+                gap: 8,
+                marginTop: 4,
+                flexWrap: "wrap",
+              }}
+            >
+              <button
+                style={{ ...primaryButtonStyle, flex: 1 }}
+                onClick={() => handleDownload(fullscreenImage)}
+                disabled={downloadBusyImageId === fullscreenImage.id}
+              >
+                {downloadBusyImageId === fullscreenImage.id
+                  ? "Downloading…"
+                  : "Download (1 credit)"}
+              </button>
+
+              <button
+                style={{ ...secondaryButtonStyle, flex: 1 }}
+                onClick={() => setFullscreenImage(null)}
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -500,6 +774,38 @@ images: ${images.length}`}
               Choose how many new designs you want. Each new design costs{" "}
               <strong>2 credits</strong>.
             </p>
+
+            {/* 👇 Show current credits in the modal */}
+            {authUserId ? (
+              <p
+                style={{
+                  fontSize: 12,
+                  opacity: 0.85,
+                  marginTop: 4,
+                  marginBottom: 8,
+                }}
+              >
+                {creditsLoading ? (
+                  <>Checking your available credits…</>
+                ) : (
+                  <>
+                    You currently have <strong>{credits ?? 0}</strong> credits
+                    available.
+                  </>
+                )}
+              </p>
+            ) : (
+              <p
+                style={{
+                  fontSize: 12,
+                  opacity: 0.85,
+                  marginTop: 4,
+                  marginBottom: 8,
+                }}
+              >
+                Log in to your Poolify account to see and use your credits.
+              </p>
+            )}
 
             <div
               style={{
@@ -532,7 +838,7 @@ images: ${images.length}`}
               />
             </div>
 
-            <p style={{ fontSize: 13 }}>
+            <p style={{ fontSize: 13, marginBottom: 6 }}>
               Total cost: <strong>{totalVariantCredits} credits</strong>
             </p>
 
@@ -611,6 +917,27 @@ images: ${images.length}`}
                 )}
               </div>
             )}
+
+            {/* Always-visible “Buy more credits” in the modal */}
+            <div
+              style={{
+                marginTop: insufficientCredits ? 10 : 16,
+                fontSize: 12,
+                opacity: 0.85,
+              }}
+            >
+              Need more credits?{" "}
+              <a
+                href="/buy-credits"
+                style={{
+                  color: "#3dffb3",
+                  textDecoration: "underline",
+                  fontWeight: 500,
+                }}
+              >
+                Get more credits
+              </a>
+            </div>
 
             <div
               style={{
@@ -812,4 +1139,67 @@ const primarySmallButtonStyle: React.CSSProperties = {
   border: "none",
   background: "linear-gradient(135deg, #27b3ff, #3dffb3)",
   color: "#000",
+};
+
+const originalCardStyle: React.CSSProperties = {
+  ...cardStyle,
+  marginBottom: 16,
+  display: "flex",
+  gap: 12,
+  alignItems: "flex-start",
+};
+
+const originalImageWrapperStyle: React.CSSProperties = {
+  flex: "0 0 160px",
+  maxWidth: 200,
+  borderRadius: 12,
+  overflow: "hidden",
+  border: "1px solid rgba(255,255,255,0.15)",
+};
+
+const originalImageStyle: React.CSSProperties = {
+  display: "block",
+  width: "100%",
+  height: "auto",
+  objectFit: "cover",
+};
+
+const headerStyle: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "flex-start",
+  gap: 12,
+  marginBottom: 24,
+  flexWrap: "wrap",
+};
+
+const headerActionsStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "row",
+  gap: 8,
+  alignItems: "center",
+};
+
+const buyCreditsButtonStyle: React.CSSProperties = {
+  display: "inline-block",
+  padding: "8px 14px",
+  borderRadius: 999,
+  border: "none",
+  background: "linear-gradient(135deg, #27b3ff, #3dffb3)",
+  color: "#000",
+  fontWeight: 600,
+  fontSize: 14,
+  textDecoration: "none",
+  cursor: "pointer",
+  whiteSpace: "nowrap",
+};
+
+const thumbnailWrapperStyle: React.CSSProperties = {
+  position: "relative",
+};
+
+const thumbnailOverlayStyle: React.CSSProperties = {
+  position: "absolute",
+  inset: 0,
+  background: "transparent",
 };

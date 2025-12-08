@@ -164,7 +164,7 @@ export default function DashboardPage() {
               Create New Gallery
             </a>
             <a href="/buy-credits" style={secondaryButton}>
-              Buy Credits
+              Get Credits
             </a>
             <a href="/" style={secondaryButton}>
               Home
@@ -212,7 +212,6 @@ export default function DashboardPage() {
                       {job.status || "pending"}
                     </span>
                   </div>
-
                   {job.created_at && (
                     <div
                       style={{
@@ -224,7 +223,6 @@ export default function DashboardPage() {
                       Created {new Date(job.created_at).toLocaleString()}
                     </div>
                   )}
-
                   <div
                     style={{
                       display: "flex",
@@ -247,7 +245,6 @@ export default function DashboardPage() {
                       <span style={chipStyle}>Features: {job.features}</span>
                     )}
                   </div>
-
                   {job.input_image_url && (
                     <div
                       style={{
@@ -270,8 +267,17 @@ export default function DashboardPage() {
                     </div>
                   )}
 
-                  {job.gallery_url && (
-                    <a href={job.gallery_url} style={primaryButtonSmall}>
+                  {(job.gallery_token || job.gallery_url) && (
+                    <a
+                      href={
+                        job.gallery_token
+                          ? `/gallery?token=${encodeURIComponent(
+                              job.gallery_token || ""
+                            )}`
+                          : job.gallery_url || "#"
+                      }
+                      style={primaryButtonSmall}
+                    >
                       View gallery
                     </a>
                   )}
