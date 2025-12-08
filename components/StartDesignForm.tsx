@@ -54,7 +54,11 @@ export default function StartDesignForm() {
     loading: creditsLoading,
     error: creditsError,
   } = useCredits();
+
   const noCredits = userId && credits !== null && credits <= 0;
+
+  const showCreditsError =
+    !!userId && !!creditsError && !creditsLoading && credits === null;
 
   React.useEffect(() => {
     // if user logs in later, prefill email if user hasn't typed yet
@@ -255,8 +259,9 @@ export default function StartDesignForm() {
 
       <div style={fieldGroupStyle}>
         <label style={labelStyle}>
-          Upload one clear photo of your backyard. <br/>
-          Note: Ensure the ENTIRE area where you want to place pool is visible in the photo.
+          Upload one clear photo of your backyard. <br />
+          Note: Ensure the ENTIRE area where you want to place pool is visible
+          in the photo.
         </label>
         <input
           style={fileInputStyle}
@@ -351,7 +356,7 @@ export default function StartDesignForm() {
           </p>
         )}
 
-        {creditsError && userId && (
+        {showCreditsError && (
           <p style={{ fontSize: 12, color: "#ffb0b0", marginBottom: 6 }}>
             Could not load your credits. You can still try submitting, but if
             you request more designs than you have credits, the job will fail.
@@ -461,12 +466,11 @@ export default function StartDesignForm() {
         </div>
       )}
 
-     <button
-  type="submit"
-  style={submitButtonStyle}
-  disabled={!!disabled}   // force boolean
->
-
+      <button
+        type="submit"
+        style={submitButtonStyle}
+        disabled={!!disabled} // force boolean
+      >
         {status === "submitting" ? "Submitting…" : "Create my gallery"}
       </button>
     </form>

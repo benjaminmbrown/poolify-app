@@ -160,8 +160,7 @@ export default function GalleryPage() {
     }
   }
 
-  // While auth is loading, we still let them VIEW the gallery.
-  // Actions (variants/credits) are gated below.
+
 
   // Basic states
   if (loading) {
