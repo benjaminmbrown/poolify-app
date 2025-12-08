@@ -461,7 +461,12 @@ export default function StartDesignForm() {
         </div>
       )}
 
-      <button type="submit" style={submitButtonStyle} disabled={disabled}>
+     <button
+  type="submit"
+  style={submitButtonStyle}
+  disabled={!!disabled}   // force boolean
+>
+
         {status === "submitting" ? "Submitting…" : "Create my gallery"}
       </button>
     </form>
