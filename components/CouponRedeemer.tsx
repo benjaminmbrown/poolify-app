@@ -113,7 +113,7 @@ const CouponRedeemer: React.FC<CouponRedeemerProps> = ({
           color: "#64748b",
         }}
       >
-        Enter your Product Hunt code (for example, <strong>COUPON67</strong>) to
+        Enter your coupon code (for example, <strong>COUPON67</strong>) to
         get bonus credits.
       </p>
 

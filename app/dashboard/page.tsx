@@ -9,11 +9,6 @@ const JOBS_PAGE_SIZE = 20;
 
 type Status = "checking-auth" | "no-user" | "loading" | "ready" | "error";
 
-type CouponRedeemerProps = {
-  apiBase: string;
-  onCreditsUpdated?: (newCredits: number) => void;
-};
-
 type JobSummary = {
   id: string;
   gallery_token?: string | null;
@@ -59,6 +54,8 @@ export default function DashboardPage() {
   const [jobsLoadingMore, setJobsLoadingMore] = React.useState(false);
 
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
+  const [showCreditActivity, setShowCreditActivity] = React.useState(false); // NEW: collapsible state
+
   const API_BASE = "https://poolify-backend-production.up.railway.app";
 
   const fetchJobsPage = React.useCallback(
@@ -240,14 +237,45 @@ export default function DashboardPage() {
           </div>
         </header>
 
-        {/* 👇 NEW: Credits overview panel right under header */}
+        {/* 🔹 Combined credits + coupon row */}
         <section style={{ marginBottom: 24 }}>
-          <CreditsOverviewPanel />
+          <div style={creditsRowStyle}>
+            {/* Left: collapsible credit activity */}
+            <div style={creditsColumnStyle}>
+              <div style={collapsibleCardStyle}>
+                <button
+                  type="button"
+                  onClick={() => setShowCreditActivity((prev) => !prev)}
+                  style={collapsibleHeaderButtonStyle}
+                >
+                  <span>Credit activity</span>
+                  <span
+                    style={{
+                      transform: showCreditActivity ? "rotate(90deg)" : "rotate(0deg)",
+                      transition: "transform 0.15s ease-out",
+                      fontSize: 14,
+                    }}
+                  >
+                    ▶
+                  </span>
+                </button>
 
-          <CouponRedeemer
-            apiBase={API_BASE}
-            onCreditsUpdated={(newCredits: number) => setCredits(newCredits)}
-          />
+                {showCreditActivity && (
+                  <div style={{ marginTop: 12 }}>
+                    <CreditsOverviewPanel />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Right: coupon input */}
+            <div style={creditsColumnStyle}>
+              <CouponRedeemer
+                apiBase={API_BASE}
+                onCreditsUpdated={(newCredits: number) => setCredits(newCredits)}
+              />
+            </div>
+          </div>
         </section>
 
         <section>
@@ -536,4 +564,39 @@ const chipStyle: React.CSSProperties = {
   fontSize: 11,
   color: "#0f172a",
   backgroundColor: "#f8fafc",
+};
+
+/* NEW: credits row + collapsible styles */
+
+const creditsRowStyle: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)",
+  gap: 16,
+  alignItems: "stretch",
+};
+
+const creditsColumnStyle: React.CSSProperties = {
+  minWidth: 0,
+};
+
+const collapsibleCardStyle: React.CSSProperties = {
+  backgroundColor: "#ffffff",
+  padding: 16,
+  borderRadius: 16,
+  border: "1px solid #e2e8f0",
+  boxShadow: "0 12px 24px rgba(15, 23, 42, 0.04)",
+};
+
+const collapsibleHeaderButtonStyle: React.CSSProperties = {
+  width: "100%",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  border: "none",
+  background: "none",
+  padding: 0,
+  cursor: "pointer",
+  fontSize: 14,
+  fontWeight: 600,
+  color: "#0f172a",
 };
