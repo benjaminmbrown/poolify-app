@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useAuth } from "@/components/AuthContext";
+import { CreditsOverviewPanel } from "@/components/CreditsOverviewPanel"; // 👈 NEW
 
 const JOBS_PAGE_SIZE = 20;
 
@@ -231,6 +232,11 @@ export default function DashboardPage() {
             </a>
           </div>
         </header>
+
+        {/* 👇 NEW: Credits overview panel right under header */}
+        <section style={{ marginBottom: 24 }}>
+          <CreditsOverviewPanel />
+        </section>
 
         <section>
           <h2 style={h2Style}>Your Galleries</h2>
