@@ -176,7 +176,7 @@ export default function StartDesignForm() {
 
       formData.append("file", file);
 
-      const res = await fetch("/api/jobs/create", {
+      const res = await fetch(`${API_BASE}/jobs/from-app`, {
         method: "POST",
         body: formData,
       });
