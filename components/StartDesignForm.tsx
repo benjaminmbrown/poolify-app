@@ -212,7 +212,7 @@ export default function StartDesignForm() {
 
   return (
     <form onSubmit={handleSubmit} style={formStyle}>
-      <h2 style={{ marginTop: 0, marginBottom: 8 }}>Start a new pool design</h2>
+      <h2 style={titleStyle}>Start a new pool design</h2>
       <p style={helperTextStyle}>
         Upload a photo of your backyard and choose your style, intensity, and
         budget. We&apos;ll generate a gallery of pool ideas and email you the
@@ -260,8 +260,10 @@ export default function StartDesignForm() {
       <div style={fieldGroupStyle}>
         <label style={labelStyle}>
           Upload one clear photo of your backyard. <br />
-          Note: Ensure the ENTIRE area where you want to place pool is visible
-          in the photo.
+          <span style={{ color: "#64748b", fontWeight: 400 }}>
+            Ensure the entire area where you want to place the pool is visible
+            in the photo.
+          </span>
         </label>
         <input
           style={fileInputStyle}
@@ -351,13 +353,13 @@ export default function StartDesignForm() {
         <label style={labelStyle}>How many designs do you want?</label>
 
         {creditsLoading && userId && (
-          <p style={{ fontSize: 12, opacity: 0.8, marginBottom: 6 }}>
+          <p style={{ fontSize: 12, color: "#64748b", marginBottom: 6 }}>
             Checking your available credits…
           </p>
         )}
 
         {showCreditsError && (
-          <p style={{ fontSize: 12, color: "#ffb0b0", marginBottom: 6 }}>
+          <p style={{ fontSize: 12, color: "#b91c1c", marginBottom: 6 }}>
             Could not load your credits. You can still try submitting, but if
             you request more designs than you have credits, the job will fail.
           </p>
@@ -365,31 +367,18 @@ export default function StartDesignForm() {
 
         {noCredits ? (
           <>
-            <p style={{ fontSize: 13, opacity: 0.85, marginBottom: 8 }}>
+            <p style={{ fontSize: 13, color: "#64748b", marginBottom: 8 }}>
               You currently have <strong>0 credits</strong>. Please add credits
               before creating a new gallery.
             </p>
-            <a
-              href="/buy-credits"
-              style={{
-                display: "inline-block",
-                padding: "8px 14px",
-                borderRadius: 999,
-                border: "none",
-                background: "linear-gradient(135deg,#27b3ff,#3dffb3)",
-                color: "#000",
-                fontWeight: 600,
-                textDecoration: "none",
-                fontSize: 14,
-              }}
-            >
+            <a href="/buy-credits" style={buyCreditsLinkStyle}>
               Buy credits
             </a>
           </>
         ) : (
           <>
             {credits !== null && credits > 0 && (
-              <p style={{ fontSize: 12, opacity: 0.8, marginBottom: 6 }}>
+              <p style={{ fontSize: 12, color: "#64748b", marginBottom: 6 }}>
                 You currently have <strong>{credits}</strong> credits. You can
                 request up to <strong>{credits}</strong> designs for this
                 gallery.
@@ -397,31 +386,73 @@ export default function StartDesignForm() {
             )}
 
             {(() => {
-              const maxDesigns =
-                credits !== null && credits > 0
-                  ? Math.min(credits, 20) // cap chips at 20 for UI sanity
-                  : 12; // fallback if not logged in / no credits info
+              const hasCreditsInfo = credits !== null && credits > 0;
 
-              const options = Array.from({ length: maxDesigns }, (_, i) =>
+              // Chips always max out at 10 (or the user's credits if less)
+              const chipMax = hasCreditsInfo ? Math.min(10, credits!) : 10;
+              const options = Array.from({ length: chipMax }, (_, i) =>
                 String(i + 1)
               );
 
+              const requestedNum = parseInt(numVariants || "0", 10) || 0;
+
+              // Only show the custom input if user has more than 10 credits
+              const showCustomInput = hasCreditsInfo && credits! > chipMax;
+
               return (
-                <div style={chipRowStyle}>
-                  {options.map((val) => (
-                    <button
-                      key={val}
-                      type="button"
-                      onClick={() => setNumVariants(val)}
-                      style={{
-                        ...chipButtonStyle,
-                        ...(numVariants === val ? chipButtonActiveStyle : {}),
-                      }}
-                    >
-                      {val}
-                    </button>
-                  ))}
-                </div>
+                <>
+                  <div style={chipRowStyle}>
+                    {options.map((val) => (
+                      <button
+                        key={val}
+                        type="button"
+                        onClick={() => setNumVariants(val)}
+                        style={{
+                          ...chipButtonStyle,
+                          ...(numVariants === val ? chipButtonActiveStyle : {}),
+                        }}
+                      >
+                        {val}
+                      </button>
+                    ))}
+                  </div>
+
+                  {showCustomInput && (
+                    <div style={customInputRowStyle}>
+                      <label
+                        style={{
+                          fontSize: 12,
+                          color: "#64748b",
+                        }}
+                      >
+                        Or enter a larger number (up to {credits} designs):
+                      </label>
+                      <input
+                        type="number"
+                        min={chipMax + 1}
+                        max={credits!}
+                        value={
+                          requestedNum > chipMax ? String(requestedNum) : ""
+                        }
+                        onChange={(e) => {
+                          const raw = Number(e.target.value);
+                          if (!raw) {
+                            setNumVariants("");
+                            return;
+                          }
+
+                          // Clamp to [chipMax+1, credits]
+                          const min = chipMax + 1;
+                          const max = credits!;
+                          const safe = Math.max(min, Math.min(max, raw));
+                          setNumVariants(String(safe));
+                        }}
+                        placeholder={`${chipMax + 1}`}
+                        style={customNumberInputStyle}
+                      />
+                    </div>
+                  )}
+                </>
               );
             })()}
           </>
@@ -429,7 +460,7 @@ export default function StartDesignForm() {
       </div>
 
       {errorMessage && (
-        <p style={{ color: "#ffb0b0", fontSize: 13, marginTop: 4 }}>
+        <p style={{ color: "#b91c1c", fontSize: 13, marginTop: 4 }}>
           {errorMessage}
         </p>
       )}
@@ -456,7 +487,11 @@ export default function StartDesignForm() {
                   You can also bookmark this link:{" "}
                   <a
                     href={appGalleryUrl}
-                    style={{ color: "#3dffb3", textDecoration: "underline" }}
+                    style={{
+                      color: "#2563eb",
+                      textDecoration: "underline",
+                      fontWeight: 500,
+                    }}
                   >
                     Open gallery
                   </a>
@@ -466,26 +501,31 @@ export default function StartDesignForm() {
         </div>
       )}
 
-      <button
-        type="submit"
-        style={submitButtonStyle}
-        disabled={!!disabled} // force boolean
-      >
+      <button type="submit" style={submitButtonStyle} disabled={!!disabled}>
         {status === "submitting" ? "Submitting…" : "Create my gallery"}
       </button>
     </form>
   );
 }
 
-/* Styles */
+/* Styles – updated to match the light Poolify theme */
 
 const formStyle: React.CSSProperties = {
-  padding: 20,
-  borderRadius: 16,
-  border: "1px solid rgba(255,255,255,0.1)",
-  background: "rgba(0,0,0,0.35)",
+  padding: 24,
+  borderRadius: 24,
+  border: "1px solid #e2e8f0",
+  backgroundColor: "#ffffff",
+  boxShadow: "0 20px 40px rgba(15, 23, 42, 0.08)",
   maxWidth: 520,
   width: "100%",
+};
+
+const titleStyle: React.CSSProperties = {
+  marginTop: 0,
+  marginBottom: 8,
+  fontSize: 22,
+  fontWeight: 700,
+  color: "#0f172a",
 };
 
 const fieldGroupStyle: React.CSSProperties = {
@@ -496,16 +536,17 @@ const labelStyle: React.CSSProperties = {
   display: "block",
   marginBottom: 4,
   fontSize: 13,
-  opacity: 0.9,
+  fontWeight: 500,
+  color: "#0f172a",
 };
 
 const inputStyle: React.CSSProperties = {
   width: "100%",
   padding: "8px 10px",
   borderRadius: 10,
-  border: "1px solid rgba(255,255,255,0.2)",
-  background: "rgba(0,0,0,0.4)",
-  color: "white",
+  border: "1px solid #e2e8f0",
+  backgroundColor: "#f8fafc",
+  color: "#0f172a",
   fontSize: 14,
   outline: "none",
 };
@@ -517,7 +558,7 @@ const fileInputStyle: React.CSSProperties = {
 
 const helperTextStyle: React.CSSProperties = {
   fontSize: 13,
-  opacity: 0.8,
+  color: "#64748b",
   marginBottom: 12,
 };
 
@@ -526,12 +567,13 @@ const submitButtonStyle: React.CSSProperties = {
   padding: "10px 16px",
   borderRadius: 999,
   border: "none",
-  background: "linear-gradient(135deg,#27b3ff,#3dffb3)",
-  color: "#000",
+  background: "linear-gradient(135deg, #0ea5e9 0%, #22c55e 50%, #6366f1 100%)",
+  color: "#ffffff",
   fontWeight: 600,
   cursor: "pointer",
   fontSize: 14,
   width: "100%",
+  boxShadow: "0 10px 20px rgba(15, 23, 42, 0.25)",
 };
 
 const successBoxStyle: React.CSSProperties = {
@@ -539,8 +581,9 @@ const successBoxStyle: React.CSSProperties = {
   marginBottom: 8,
   padding: 10,
   borderRadius: 12,
-  background: "rgba(0,80,30,0.6)",
-  border: "1px solid rgba(61,255,179,0.5)",
+  backgroundColor: "#ecfdf3",
+  border: "1px solid #22c55e",
+  color: "#14532d",
 };
 
 const chipRowStyle: React.CSSProperties = {
@@ -552,15 +595,48 @@ const chipRowStyle: React.CSSProperties = {
 const chipButtonStyle: React.CSSProperties = {
   padding: "4px 10px",
   borderRadius: 999,
-  border: "1px solid rgba(255,255,255,0.2)",
-  background: "rgba(0,0,0,0.4)",
-  color: "white",
+  border: "1px solid #cbd5f5",
+  backgroundColor: "#e2e8f0",
+  color: "#0f172a",
   fontSize: 12,
   cursor: "pointer",
 };
 
 const chipButtonActiveStyle: React.CSSProperties = {
   border: "none",
-  background: "linear-gradient(135deg,#27b3ff,#3dffb3)",
-  color: "#000",
+  backgroundColor: "#0ea5e9", // base color under the gradient
+  backgroundImage:
+    "linear-gradient(135deg, #0ea5e9 0%, #22c55e 50%, #6366f1 100%)",
+  color: "#ffffff",
+  boxShadow: "0 8px 16px rgba(15, 23, 42, 0.25)",
+};
+
+const buyCreditsLinkStyle: React.CSSProperties = {
+  display: "inline-block",
+  padding: "8px 14px",
+  borderRadius: 999,
+  border: "none",
+  background: "linear-gradient(135deg, #0ea5e9 0%, #22c55e 50%, #6366f1 100%)",
+  color: "#ffffff",
+  fontWeight: 600,
+  textDecoration: "none",
+  fontSize: 14,
+};
+
+const customInputRowStyle: React.CSSProperties = {
+  marginTop: 8,
+  display: "flex",
+  flexDirection: "column",
+  gap: 4,
+};
+
+const customNumberInputStyle: React.CSSProperties = {
+  width: 120,
+  padding: "6px 8px",
+  borderRadius: 10,
+  border: "1px solid #e2e8f0",
+  backgroundColor: "#f8fafc",
+  color: "#0f172a",
+  fontSize: 14,
+  outline: "none",
 };

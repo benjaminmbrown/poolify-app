@@ -32,11 +32,12 @@ type JobImage = {
   // Full-resolution image
   image_url: string;
 
-  // 🔹 NEW: low-res thumbnail URL (optional so it won't break existing data)
+  // low-res thumbnail URL (optional so it won't break existing data)
   thumbnail_url?: string | null;
 
   created_at?: string | null;
 };
+
 type GalleryResponse = {
   job: Job | null;
   images: JobImage[];
@@ -73,9 +74,8 @@ export default function GalleryPage() {
   const [debugToken, setDebugToken] = React.useState<string | null>(null);
   const [debugUrl, setDebugUrl] = React.useState<string | null>(null);
 
-  const [fullscreenImage, setFullscreenImage] = React.useState<JobImage | null>(
-    null
-  );
+  const [fullscreenImage, setFullscreenImage] =
+    React.useState<JobImage | null>(null);
 
   const [variantModalOpen, setVariantModalOpen] = React.useState(false);
   const [selectedImage, setSelectedImage] = React.useState<JobImage | null>(
@@ -98,7 +98,6 @@ export default function GalleryPage() {
   const [insufficientCredits, setInsufficientCredits] =
     React.useState<InsufficientCreditsInfo | null>(null);
 
-  // ➕ ADD THIS
   const {
     credits,
     loading: creditsLoading,
@@ -160,8 +159,6 @@ export default function GalleryPage() {
     }
   }
 
-
-
   // Basic states
   if (loading) {
     return (
@@ -176,7 +173,7 @@ export default function GalleryPage() {
       <div style={pageStyle}>
         <div style={cardStyle}>
           <h2 style={h2Style}>Gallery Error</h2>
-          <p>{error}</p>
+          <p style={mutedStyle}>{error}</p>
           <pre style={debugBoxStyle}>
             {`token: ${debugToken ?? "null"}
 url:   ${debugUrl ?? "null"}`}
@@ -427,7 +424,6 @@ url:   ${debugUrl ?? "null"}`}
   return (
     <div style={pageStyle}>
       {/* Header */}
-
       <header style={headerRowStyle}>
         <div style={{ maxWidth: "min(640px, 100%)" }}>
           <h1 style={h1Style}>{title}</h1>
@@ -437,18 +433,18 @@ url:   ${debugUrl ?? "null"}`}
             landscaper.
           </p>
           {!authLoading && !authUserId && (
-            <p style={{ fontSize: 13, opacity: 0.8, marginTop: 4 }}>
+            <p style={{ fontSize: 13, color: "#64748b", marginTop: 4 }}>
               To generate more designs or credits, please create an account or
               log in on the main page.
             </p>
           )}
 
-          {/* 🔹 New: credits notice + Get more credits link */}
           {!authLoading && authUserId && typeof credits === "number" && (
             <p
               style={{
                 fontSize: 13,
                 marginTop: 8,
+                color: "#64748b",
               }}
             >
               Available credits: <strong>{credits}</strong>{" "}
@@ -458,6 +454,7 @@ url:   ${debugUrl ?? "null"}`}
                 style={{
                   marginLeft: 8,
                   textDecoration: "underline",
+                  color: "#0f172a",
                 }}
               >
                 Get more credits
@@ -473,15 +470,17 @@ url:   ${debugUrl ?? "null"}`}
           <a
             href="/start"
             onClick={() => trackEvent("click_create_new_gallery", {})}
-            style={{ fontSize: 13, textDecoration: "underline" }}
+            style={{ fontSize: 13, textDecoration: "underline", color: "#0f172a" }}
           >
             Create new gallery
           </a>
-          <a href="/dashboard">Dashboard</a>
+          <a href="/dashboard" style={{ fontSize: 13, color: "#0f172a" }}>
+            Dashboard
+          </a>
         </div>
       </header>
 
-      {/* ✅ Original backyard reference */}
+      {/* Original backyard reference */}
       {job?.input_image_url && (
         <section style={originalCardStyle}>
           <div style={originalImageWrapperStyle}>
@@ -492,10 +491,10 @@ url:   ${debugUrl ?? "null"}`}
             />
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 13, opacity: 0.8, marginBottom: 4 }}>
+            <div style={{ fontSize: 13, color: "#64748b", marginBottom: 4 }}>
               Original backyard photo
             </div>
-            <p style={{ fontSize: 12, opacity: 0.7, margin: 0 }}>
+            <p style={{ fontSize: 12, color: "#64748b", margin: 0 }}>
               This is the photo you uploaded. The designs below are based on
               this space. Use it as a reference when comparing layouts,
               features, and angles.
@@ -520,7 +519,6 @@ url:   ${debugUrl ?? "null"}`}
       )}
 
       {/* Images */}
-      {/* Images */}
       <section>
         {images.length === 0 ? (
           <div style={cardStyle}>
@@ -544,14 +542,12 @@ url:   ${debugUrl ?? "null"}`}
               >
                 <div style={thumbnailWrapperStyle}>
                   <img
-                    // 🔹 Serve low-res first, fallback to full-res
                     src={img.thumbnail_url || img.image_url}
                     alt={`Pool design ${index + 1}`}
                     style={imgStyle}
                     onContextMenu={(e) => e.preventDefault()}
                     draggable={false}
                   />
-                  {/* Transparent overlay to block direct "Save image as" on the <img> */}
                   <div
                     style={thumbnailOverlayStyle}
                     onContextMenu={(e) => e.preventDefault()}
@@ -582,7 +578,7 @@ url:   ${debugUrl ?? "null"}`}
                       >
                         View full size
                       </button>
-                      <button
+                      {/* <button
                         style={smallButtonStyle}
                         onClick={() => handleDownload(img)}
                         disabled={downloadBusyImageId === img.id}
@@ -590,7 +586,7 @@ url:   ${debugUrl ?? "null"}`}
                         {downloadBusyImageId === img.id
                           ? "Downloading…"
                           : "Download"}
-                      </button>
+                      </button> */}
                       {canRequestVariants ? (
                         <button
                           style={primarySmallButtonStyle}
@@ -602,7 +598,7 @@ url:   ${debugUrl ?? "null"}`}
                         <span
                           style={{
                             fontSize: 11,
-                            opacity: 0.7,
+                            color: "#64748b",
                           }}
                         >
                           Log in with this project&apos;s email to get more
@@ -626,7 +622,7 @@ url:   ${debugUrl ?? "null"}`}
               style={{
                 margin: 0,
                 fontSize: 13,
-                color: "#ffb0b0",
+                color: "#b91c1c",
               }}
             >
               {downloadError}
@@ -665,7 +661,7 @@ url:   ${debugUrl ?? "null"}`}
               style={{
                 marginTop: 8,
                 fontSize: 12,
-                opacity: 0.8,
+                color: "#64748b",
               }}
             >
               Log in or create a Poolify account to purchase credits and
@@ -675,7 +671,7 @@ url:   ${debugUrl ?? "null"}`}
         </section>
       )}
 
-      {/* Debug footer – leave for now, can be removed later */}
+      {/* Debug footer – can remove later */}
       <footer style={debugFooterStyle}>
         <div>
           <strong>Debug</strong>
@@ -698,35 +694,34 @@ images: ${images.length}`}
               draggable={false}
               style={{
                 maxWidth: "100%",
-                maxHeight: "80vh",
+                maxHeight: "70vh",
                 display: "block",
                 borderRadius: 16,
                 marginBottom: 12,
               }}
             />
 
-            {/* Credits info + Get more credits link */}
             <p
               style={{
                 fontSize: 12,
-                opacity: 0.8,
+                color: "#64748b",
                 margin: "0 0 10px",
               }}
             >
-              Downloads cost <strong>1 credit</strong>
+              High resolution/full size downloads cost <strong>1 credit</strong>.<br/>
               {typeof credits === "number" && (
                 <>
                   {" "}
-                  · You currently have <strong>{credits}</strong> credits.{" "}
+                You currently have <strong>{credits} credits</strong> .{" "}
                 </>
               )}
               <a
                 href="/buy-credits"
                 style={{
-                  color: "#3dffb3",
                   textDecoration: "underline",
                   fontWeight: 500,
                   marginLeft: 4,
+                  color: "#0f172a",
                 }}
               >
                 Get more credits
@@ -774,12 +769,11 @@ images: ${images.length}`}
               <strong>2 credits</strong>.
             </p>
 
-            {/* 👇 Show current credits in the modal */}
             {authUserId ? (
               <p
                 style={{
                   fontSize: 12,
-                  opacity: 0.85,
+                  color: "#64748b",
                   marginTop: 4,
                   marginBottom: 8,
                 }}
@@ -797,7 +791,7 @@ images: ${images.length}`}
               <p
                 style={{
                   fontSize: 12,
-                  opacity: 0.85,
+                  color: "#64748b",
                   marginTop: 4,
                   marginBottom: 8,
                 }}
@@ -826,18 +820,11 @@ images: ${images.length}`}
                     Math.max(1, Math.min(20, Number(e.target.value) || 1))
                   )
                 }
-                style={{
-                  width: 70,
-                  padding: "4px 6px",
-                  borderRadius: 6,
-                  border: "1px solid rgba(255,255,255,0.2)",
-                  background: "rgba(15,15,15,0.8)",
-                  color: "white",
-                }}
+                style={variantInputStyle}
               />
             </div>
 
-            <p style={{ fontSize: 13, marginBottom: 6 }}>
+            <p style={{ fontSize: 13, marginBottom: 6, color: "#0f172a" }}>
               Total cost: <strong>{totalVariantCredits} credits</strong>
             </p>
 
@@ -846,7 +833,7 @@ images: ${images.length}`}
                 style={{
                   marginTop: 8,
                   fontSize: 13,
-                  color: "#a0ffb5",
+                  color: "#15803d",
                 }}
               >
                 {variantMessage}
@@ -858,7 +845,7 @@ images: ${images.length}`}
                 style={{
                   marginTop: 8,
                   fontSize: 13,
-                  color: "#ffb0b0",
+                  color: "#b91c1c",
                 }}
               >
                 {variantError}
@@ -870,7 +857,7 @@ images: ${images.length}`}
                 style={{
                   marginTop: 12,
                   fontSize: 13,
-                  borderTop: "1px solid rgba(255,255,255,0.1)",
+                  borderTop: "1px solid #e2e8f0",
                   paddingTop: 10,
                 }}
               >
@@ -908,7 +895,7 @@ images: ${images.length}`}
                     style={{
                       marginTop: 6,
                       fontSize: 12,
-                      opacity: 0.8,
+                      color: "#64748b",
                     }}
                   >
                     Log in to your account to purchase credits.
@@ -917,21 +904,20 @@ images: ${images.length}`}
               </div>
             )}
 
-            {/* Always-visible “Buy more credits” in the modal */}
             <div
               style={{
                 marginTop: insufficientCredits ? 10 : 16,
                 fontSize: 12,
-                opacity: 0.85,
+                color: "#64748b",
               }}
             >
               Need more credits?{" "}
               <a
                 href="/buy-credits"
                 style={{
-                  color: "#3dffb3",
                   textDecoration: "underline",
                   fontWeight: 500,
+                  color: "#0f172a",
                 }}
               >
                 Get more credits
@@ -975,26 +961,31 @@ function MetaChip(props: { label: string; value: string }) {
       style={{
         padding: "6px 10px",
         borderRadius: 999,
-        border: "1px solid rgba(255,255,255,0.12)",
+        border: "1px solid #e2e8f0",
+        backgroundColor: "#f8fafc",
         fontSize: 12,
         display: "inline-flex",
         gap: 4,
         alignItems: "center",
+        color: "#0f172a",
       }}
     >
-      <span style={{ opacity: 0.7 }}>{props.label}:</span>
+      <span style={{ color: "#64748b" }}>{props.label}:</span>
       <span>{props.value}</span>
     </div>
   );
 }
 
-/* Styles */
+/* Styles – updated to match light Poolify theme */
 
 const pageStyle: React.CSSProperties = {
   fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'SF Pro Text'",
   padding: 24,
   maxWidth: 1100,
   margin: "0 auto",
+  backgroundColor: "#ffffff",
+  color: "#0f172a",
+  minHeight: "100vh",
 };
 
 const h1Style: React.CSSProperties = {
@@ -1006,13 +997,14 @@ const h1Style: React.CSSProperties = {
 const h2Style: React.CSSProperties = {
   fontSize: 22,
   marginTop: 0,
+  marginBottom: 8,
 };
 
 const mutedStyle: React.CSSProperties = {
   fontSize: 14,
-  opacity: 0.85,
-  color: "white",
+  color: "#64748b",
 };
+
 const headerRowStyle: React.CSSProperties = {
   display: "flex",
   justifyContent: "space-between",
@@ -1024,9 +1016,10 @@ const headerRowStyle: React.CSSProperties = {
 
 const cardStyle: React.CSSProperties = {
   padding: 18,
-  borderRadius: 16,
-  border: "1px solid rgba(255,255,255,0.08)",
-  background: "rgba(0,0,0,0.2)",
+  borderRadius: 20,
+  border: "1px solid #e2e8f0",
+  backgroundColor: "#ffffff",
+  boxShadow: "0 16px 30px rgba(15, 23, 42, 0.06)",
 };
 
 const gridStyle: React.CSSProperties = {
@@ -1036,11 +1029,12 @@ const gridStyle: React.CSSProperties = {
 };
 
 const imgCardStyle: React.CSSProperties = {
-  borderRadius: 16,
+  borderRadius: 20,
   overflow: "hidden",
   margin: 0,
-  border: "1px solid rgba(255,255,255,0.1)",
-  background: "rgba(0,0,0,0.4)",
+  border: "1px solid #e2e8f0",
+  backgroundColor: "#ffffff",
+  boxShadow: "0 14px 28px rgba(15, 23, 42, 0.06)",
 };
 
 const imgStyle: React.CSSProperties = {
@@ -1050,17 +1044,17 @@ const imgStyle: React.CSSProperties = {
 };
 
 const captionStyle: React.CSSProperties = {
-  padding: "8px 10px",
+  padding: "8px 10px 10px",
   fontSize: 13,
-  opacity: 0.9,
+  color: "#0f172a",
 };
 
 const debugBoxStyle: React.CSSProperties = {
   marginTop: 16,
   padding: 10,
   borderRadius: 10,
-  background: "#050505",
-  color: "#0f0",
+  background: "#020617",
+  color: "#a3e635",
   fontSize: 11,
   overflowX: "auto",
 };
@@ -1069,37 +1063,41 @@ const debugFooterStyle: React.CSSProperties = {
   marginTop: 24,
   padding: 10,
   borderRadius: 12,
-  background: "rgba(0,0,0,0.3)",
+  backgroundColor: "#e2e8f0",
   fontSize: 11,
+  color: "#0f172a",
 };
 
 const overlayStyle: React.CSSProperties = {
   position: "fixed",
   inset: 0,
-  background: "rgba(0,0,0,0.65)",
+  background: "rgba(255,255,255,0.9)", // light overlay instead of black
+  backdropFilter: "blur(6px)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
   zIndex: 9999,
+  padding: 16,
 };
 
 const overlayInnerStyle: React.CSSProperties = {
-  maxWidth: "90vw",
-  padding: 16,
-  borderRadius: 16,
-  background: "rgba(30,30,30,0.95)",
-  color: "white",
-  boxShadow: "0 20px 60px rgba(0,0,0,0.7)",
+  maxWidth: 600,
+  width: "100%",
+  padding: 20,
+  borderRadius: 20,
+  backgroundColor: "#ffffff",
+  color: "#0f172a",
+  boxShadow: "0 24px 60px rgba(15, 23, 42, 0.2)",
 };
 
 const modalStyle: React.CSSProperties = {
   width: "100%",
   maxWidth: 420,
   padding: 20,
-  borderRadius: 16,
-  background: "rgba(30,30,30,0.95)",
-  color: "white",
-  boxShadow: "0 20px 60px rgba(0,0,0,0.7)",
+  borderRadius: 20,
+  backgroundColor: "#ffffff",
+  color: "#0f172a",
+  boxShadow: "0 24px 60px rgba(15, 23, 42, 0.2)",
 };
 
 const primaryButtonStyle: React.CSSProperties = {
@@ -1108,36 +1106,39 @@ const primaryButtonStyle: React.CSSProperties = {
   border: "none",
   cursor: "pointer",
   fontSize: 14,
-  fontWeight: 500,
-  background: "linear-gradient(135deg, #27b3ff, #3dffb3)",
-  color: "#000",
+  fontWeight: 600,
+  background:
+    "linear-gradient(135deg, #0ea5e9 0%, #22c55e 50%, #6366f1 100%)",
+  color: "#ffffff",
+  boxShadow: "0 10px 20px rgba(15, 23, 42, 0.25)",
 };
 
 const secondaryButtonStyle: React.CSSProperties = {
   padding: "8px 14px",
   borderRadius: 999,
-  border: "1px solid rgba(255,255,255,0.2)",
+  border: "1px solid #cbd5f5",
   cursor: "pointer",
   fontSize: 14,
-  background: "transparent",
-  color: "inherit",
+  backgroundColor: "#ffffff",
+  color: "#0f172a",
 };
 
 const smallButtonStyle: React.CSSProperties = {
-  padding: "4px 8px",
+  padding: "4px 10px",
   borderRadius: 999,
-  border: "1px solid rgba(255,255,255,0.25)",
+  border: "1px solid #cbd5f5",
   cursor: "pointer",
   fontSize: 11,
-  background: "rgba(0,0,0,0.4)",
-  color: "inherit",
+  backgroundColor: "#ffffff",
+  color: "#0f172a",
 };
 
 const primarySmallButtonStyle: React.CSSProperties = {
   ...smallButtonStyle,
   border: "none",
-  background: "linear-gradient(135deg, #27b3ff, #3dffb3)",
-  color: "#000",
+  background:
+    "linear-gradient(135deg, #0ea5e9 0%, #22c55e 50%, #6366f1 100%)",
+  color: "#ffffff",
 };
 
 const originalCardStyle: React.CSSProperties = {
@@ -1153,7 +1154,7 @@ const originalImageWrapperStyle: React.CSSProperties = {
   maxWidth: 200,
   borderRadius: 12,
   overflow: "hidden",
-  border: "1px solid rgba(255,255,255,0.15)",
+  border: "1px solid #e2e8f0",
 };
 
 const originalImageStyle: React.CSSProperties = {
@@ -1163,20 +1164,12 @@ const originalImageStyle: React.CSSProperties = {
   objectFit: "cover",
 };
 
-const headerStyle: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "flex-start",
-  gap: 12,
-  marginBottom: 24,
-  flexWrap: "wrap",
-};
-
 const headerActionsStyle: React.CSSProperties = {
   display: "flex",
   flexDirection: "row",
   gap: 8,
   alignItems: "center",
+  flexWrap: "wrap",
 };
 
 const buyCreditsButtonStyle: React.CSSProperties = {
@@ -1184,8 +1177,9 @@ const buyCreditsButtonStyle: React.CSSProperties = {
   padding: "8px 14px",
   borderRadius: 999,
   border: "none",
-  background: "linear-gradient(135deg, #27b3ff, #3dffb3)",
-  color: "#000",
+  background:
+    "linear-gradient(135deg, #0ea5e9 0%, #22c55e 50%, #6366f1 100%)",
+  color: "#ffffff",
   fontWeight: 600,
   fontSize: 14,
   textDecoration: "none",
@@ -1201,4 +1195,14 @@ const thumbnailOverlayStyle: React.CSSProperties = {
   position: "absolute",
   inset: 0,
   background: "transparent",
+};
+
+const variantInputStyle: React.CSSProperties = {
+  width: 70,
+  padding: "4px 6px",
+  borderRadius: 6,
+  border: "1px solid #e2e8f0",
+  backgroundColor: "#ffffff",
+  color: "#0f172a",
+  fontSize: 14,
 };

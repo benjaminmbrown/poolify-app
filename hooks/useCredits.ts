@@ -1,70 +1,97 @@
-"use client"
+"use client";
 
-import * as React from "react"
-import { useAuth } from "@/components/AuthContext"
+import * as React from "react";
+import { useAuth } from "@/components/AuthContext";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE!
+type CreditsResult = {
+  credits: number | null;
+  loading: boolean;
+  error: string | null;
+  refresh: () => Promise<void>;
+};
 
-type UseCreditsResult = {
-  credits: number | null
-  loading: boolean
-  error: string | null
-  refresh: () => void
-}
+/**
+ * Centralized credits hook:
+ * - Reads userId/email from AuthContext
+ * - Fetches credits from /api/me/credits
+ * - Handles auth hydration timing
+ * - Exposes `refresh()` to re-check credits on demand
+ */
+export function useCredits(): CreditsResult {
+  const auth = useAuth();
+  const userId = auth?.userId || null;
+  const email = auth?.email || null;
 
-export function useCredits(): UseCreditsResult {
-  const auth = useAuth()
-  const userId = auth?.userId || null
-  const email = auth?.email || null
-  const authLoading = auth?.loading || false
+  const [credits, setCredits] = React.useState<number | null>(null);
+  const [loading, setLoading] = React.useState<boolean>(false);
+  const [error, setError] = React.useState<string | null>(null);
 
-  const [credits, setCredits] = React.useState<number | null>(null)
-  const [loading, setLoading] = React.useState(false)
-  const [error, setError] = React.useState<string | null>(null)
-
-  const fetchCredits = React.useCallback(async () => {
+  const loadCredits = React.useCallback(async () => {
+    // If there is no logged-in user yet, don't try to fetch credits
     if (!userId) {
-      setCredits(null)
-      setError(null)
-      return
+      setCredits(null);
+      setLoading(false);
+      setError(null);
+      return;
     }
-
-    setLoading(true)
-    setError(null)
 
     try {
-      const params = new URLSearchParams({ user_id: userId })
-      if (email) params.set("email", email)
+      setLoading(true);
+      setError(null);
 
-      const res = await fetch(`${API_BASE}/me/credits?${params.toString()}`)
-      const json = await res.json()
-
-      if (!res.ok || json.error) {
-        throw new Error(json.error || res.statusText)
+      const params = new URLSearchParams({ user_id: userId });
+      if (email) {
+        params.set("email", email);
       }
 
-      setCredits(typeof json.credits === "number" ? json.credits : 0)
-    } catch (err: any) {
-      console.error("useCredits fetch error:", err)
-      setError(err?.message || "Could not load credits.")
+      const res = await fetch(`/api/me/credits?${params.toString()}`, {
+        method: "GET",
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        console.error("useCredits: failed response", data);
+        setError("Failed to load credits");
+        setCredits(null);
+        return;
+      }
+
+      const data = await res.json();
+
+      if (typeof data.credits === "number") {
+        setCredits(data.credits);
+        setError(null);
+      } else {
+        console.error("useCredits: unexpected payload", data);
+        setError("Failed to load credits");
+        setCredits(null);
+      }
+    } catch (err) {
+      console.error("useCredits: network error", err);
+      setError("Failed to load credits");
+      setCredits(null);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }, [userId, email])
+  }, [userId, email]);
 
+  // Load credits whenever the authenticated user changes
   React.useEffect(() => {
-    if (authLoading) return
     if (!userId) {
-      setCredits(null)
-      return
+      // user logged out or not hydrated yet
+      setCredits(null);
+      setError(null);
+      setLoading(false);
+      return;
     }
-    fetchCredits()
-  }, [authLoading, userId, fetchCredits])
 
-  return {
-    credits,
-    loading,
-    error,
-    refresh: fetchCredits,
-  }
+    loadCredits();
+  }, [userId, loadCredits]);
+
+  // Allow consumers to manually refresh
+  const refresh = React.useCallback(async () => {
+    await loadCredits();
+  }, [loadCredits]);
+
+  return { credits, loading, error, refresh };
 }

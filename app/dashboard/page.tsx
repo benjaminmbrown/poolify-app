@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useAuth } from "@/components/AuthContext";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE!;
+const JOBS_PAGE_SIZE = 20;
 
 type Status = "checking-auth" | "no-user" | "loading" | "ready" | "error";
 
@@ -19,10 +19,16 @@ type JobSummary = {
   zip?: string | null;
   features?: string | null;
   input_image_url?: string | null;
+  // Optional thumbnail if you add it later
+  input_thumbnail_url?: string | null;
 };
 
 type JobsResponse = {
   jobs?: JobSummary[];
+  total?: number;
+  limit?: number;
+  offset?: number;
+  has_more?: boolean;
   error?: string;
 };
 
@@ -39,8 +45,47 @@ export default function DashboardPage() {
 
   const [status, setStatus] = React.useState<Status>("checking-auth");
   const [credits, setCredits] = React.useState<number | null>(null);
+
   const [jobs, setJobs] = React.useState<JobSummary[]>([]);
+  const [jobsTotal, setJobsTotal] = React.useState<number | null>(null);
+  const [jobsHasMore, setJobsHasMore] = React.useState(false);
+  const [jobsLoadingMore, setJobsLoadingMore] = React.useState(false);
+
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
+
+  const fetchJobsPage = React.useCallback(
+    async (offset: number, append: boolean) => {
+      if (!userId) return;
+
+      const jobsParams = new URLSearchParams({ user_id: userId });
+      jobsParams.set("limit", String(JOBS_PAGE_SIZE));
+      jobsParams.set("offset", String(offset));
+
+      const jobsRes = await fetch(`/api/me/jobs?${jobsParams.toString()}`);
+      const jobsJson: JobsResponse = await jobsRes.json();
+
+      if (!jobsRes.ok || jobsJson.error) {
+        throw new Error(jobsJson.error || jobsRes.statusText);
+      }
+
+      const newJobs = jobsJson.jobs || [];
+
+      setJobs((prev) => {
+        if (!append) {
+          return newJobs;
+        }
+
+        const seen = new Set(prev.map((j) => j.id));
+        const filteredNew = newJobs.filter((j) => !seen.has(j.id));
+
+        return [...prev, ...filteredNew];
+      });
+
+      setJobsTotal(typeof jobsJson.total === "number" ? jobsJson.total : null);
+      setJobsHasMore(!!jobsJson.has_more);
+    },
+    [userId]
+  );
 
   React.useEffect(() => {
     if (authLoading) return;
@@ -56,6 +101,7 @@ export default function DashboardPage() {
       setStatus("loading");
 
       try {
+        // 1) Fetch credits
         const creditParams = new URLSearchParams({ user_id: userId });
         if (email) {
           creditParams.set("email", email);
@@ -73,16 +119,9 @@ export default function DashboardPage() {
 
         setCredits(creditsJson.credits !== undefined ? creditsJson.credits : 0);
 
-        const jobsParams = new URLSearchParams({ user_id: userId });
-        const jobsRes = await fetch(`/api/me/jobs?${jobsParams.toString()}`);
+        // 2) Fetch first page of jobs
+        await fetchJobsPage(0, false);
 
-        const jobsJson: JobsResponse = await jobsRes.json();
-
-        if (!jobsRes.ok || jobsJson.error) {
-          throw new Error(jobsJson.error || jobsRes.statusText);
-        }
-
-        setJobs(jobsJson.jobs || []);
         setStatus("ready");
       } catch (e: any) {
         console.error("Dashboard boot error:", e);
@@ -94,7 +133,28 @@ export default function DashboardPage() {
     };
 
     boot();
-  }, [authLoading, userId, email]);
+  }, [authLoading, userId, email, fetchJobsPage]);
+
+  const handleLoadMore = async () => {
+    if (!userId || jobsLoadingMore || !jobsHasMore) return;
+
+    setJobsLoadingMore(true);
+    setErrorMessage(null);
+
+    try {
+      const nextOffset = jobs.length;
+      await fetchJobsPage(nextOffset, true);
+    } catch (e: any) {
+      console.error("Load more jobs error:", e);
+      setErrorMessage(
+        e?.message || "Could not load more galleries. Please try again."
+      );
+    } finally {
+      setJobsLoadingMore(false);
+    }
+  };
+
+  // ----- Render states -----
 
   if (status === "checking-auth" || status === "loading") {
     return (
@@ -132,7 +192,7 @@ export default function DashboardPage() {
         <div style={scrollAreaStyle}>
           <div style={cardStyle}>
             <h2 style={h2Style}>Problem loading dashboard</h2>
-            <p style={{ color: "#ffb0b0", fontSize: 14 }}>{errorMessage}</p>
+            <p style={{ color: "#b91c1c", fontSize: 14 }}>{errorMessage}</p>
             <a href="/" style={secondaryButton}>
               Back to Home
             </a>
@@ -188,102 +248,151 @@ export default function DashboardPage() {
               </div>
             </div>
           ) : (
-            <div style={jobsGridStyle}>
-              {jobs.map((job) => (
-                <div key={job.id} style={jobCardStyle}>
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      gap: 8,
-                      marginBottom: 8,
-                    }}
-                  >
-                    <div style={{ fontWeight: 600, fontSize: 14 }}>
-                      {job.zip ? `Designs for ${job.zip}` : "Poolify Designs"}
-                    </div>
-                    <span
-                      style={{
-                        fontSize: 12,
-                        opacity: 0.75,
-                        textTransform: "capitalize",
-                      }}
-                    >
-                      {job.status || "pending"}
-                    </span>
-                  </div>
-                  {job.created_at && (
+            <>
+              <div style={jobsGridStyle}>
+                {jobs.map((job) => (
+                  <div key={job.id} style={jobCardStyle}>
                     <div
                       style={{
-                        fontSize: 11,
-                        opacity: 0.7,
-                        marginBottom: 6,
+                        display: "flex",
+                        justifyContent: "space-between",
+                        gap: 8,
+                        marginBottom: 8,
                       }}
                     >
-                      Created {new Date(job.created_at).toLocaleString()}
-                    </div>
-                  )}
-                  <div
-                    style={{
-                      display: "flex",
-                      flexWrap: "wrap",
-                      gap: 8,
-                      marginBottom: 10,
-                      fontSize: 12,
-                    }}
-                  >
-                    {job.style && (
-                      <span style={chipStyle}>Style: {job.style}</span>
-                    )}
-                    {job.budget !== null && job.budget !== undefined && (
-                      <span style={chipStyle}>Budget: {job.budget}</span>
-                    )}
-                    {job.intensity !== null && job.intensity !== undefined && (
-                      <span style={chipStyle}>Intensity: {job.intensity}</span>
-                    )}
-                    {job.features && (
-                      <span style={chipStyle}>Features: {job.features}</span>
-                    )}
-                  </div>
-                  {job.input_image_url && (
-                    <div
-                      style={{
-                        marginBottom: 10,
-                        borderRadius: 12,
-                        overflow: "hidden",
-                        border: "1px solid rgba(255,255,255,0.1)",
-                      }}
-                    >
-                      <img
-                        src={job.input_image_url}
-                        alt="Original backyard"
+                      <div style={{ fontWeight: 600, fontSize: 14 }}>
+                        {job.zip ? `Designs for ${job.zip}` : "Poolify Designs"}
+                      </div>
+                      <span
                         style={{
-                          width: "100%",
-                          display: "block",
-                          maxHeight: 140,
-                          objectFit: "cover",
+                          fontSize: 12,
+                          opacity: 0.75,
+                          textTransform: "capitalize",
                         }}
-                      />
+                      >
+                        {job.status || "pending"}
+                      </span>
                     </div>
-                  )}
-
-                  {(job.gallery_token || job.gallery_url) && (
-                    <a
-                      href={
-                        job.gallery_token
-                          ? `/gallery?token=${encodeURIComponent(
-                              job.gallery_token || ""
-                            )}`
-                          : job.gallery_url || "#"
-                      }
-                      style={primaryButtonSmall}
+                    {job.created_at && (
+                      <div
+                        style={{
+                          fontSize: 11,
+                          opacity: 0.7,
+                          marginBottom: 6,
+                        }}
+                      >
+                        Created {new Date(job.created_at).toLocaleString()}
+                      </div>
+                    )}
+                    <div
+                      style={{
+                        display: "flex",
+                        flexWrap: "wrap",
+                        gap: 8,
+                        marginBottom: 10,
+                        fontSize: 12,
+                      }}
                     >
-                      View gallery
-                    </a>
+                      {job.style && (
+                        <span style={chipStyle}>Style: {job.style}</span>
+                      )}
+                      {job.budget !== null && job.budget !== undefined && (
+                        <span style={chipStyle}>Budget: {job.budget}</span>
+                      )}
+                      {job.intensity !== null &&
+                        job.intensity !== undefined && (
+                          <span style={chipStyle}>
+                            Intensity: {job.intensity}
+                          </span>
+                        )}
+                      {job.features && (
+                        <span style={chipStyle}>Features: {job.features}</span>
+                      )}
+                    </div>
+                    {job.input_image_url && (
+                      <div
+                        style={{
+                          marginBottom: 10,
+                          borderRadius: 12,
+                          overflow: "hidden",
+                          border: "1px solid #e2e8f0",
+                        }}
+                      >
+                        <img
+                          src={job.input_thumbnail_url || job.input_image_url}
+                          alt="Original backyard"
+                          loading="lazy"
+                          style={{
+                            width: "100%",
+                            display: "block",
+                            maxHeight: 140,
+                            objectFit: "cover",
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    {(job.gallery_token || job.gallery_url) && (
+                      <a
+                        href={
+                          job.gallery_token
+                            ? `/gallery?token=${encodeURIComponent(
+                                job.gallery_token || ""
+                              )}`
+                            : job.gallery_url || "#"
+                        }
+                        style={primaryButtonSmall}
+                      >
+                        View gallery
+                      </a>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {/* Load more footer */}
+              {jobsHasMore && (
+                <div
+                  style={{
+                    marginTop: 16,
+                    textAlign: "center",
+                  }}
+                >
+                  <button
+                    style={secondaryButton}
+                    onClick={handleLoadMore}
+                    disabled={jobsLoadingMore}
+                  >
+                    {jobsLoadingMore
+                      ? "Loading more galleries…"
+                      : "Load more galleries"}
+                  </button>
+                  {jobsTotal !== null && (
+                    <p
+                      style={{
+                        marginTop: 6,
+                        fontSize: 12,
+                        color: "#64748b",
+                      }}
+                    >
+                      Showing {jobs.length} of {jobsTotal} galleries.
+                    </p>
                   )}
                 </div>
-              ))}
-            </div>
+              )}
+            </>
+          )}
+
+          {errorMessage && (
+            <p
+              style={{
+                marginTop: 12,
+                fontSize: 13,
+                color: "#b91c1c",
+              }}
+            >
+              {errorMessage}
+            </p>
           )}
         </section>
       </div>
@@ -291,7 +400,7 @@ export default function DashboardPage() {
   );
 }
 
-/* Styles reused from your existing TSX */
+/* Styles */
 
 const outerStyle: React.CSSProperties = {
   position: "relative",
@@ -303,6 +412,7 @@ const outerStyle: React.CSSProperties = {
   display: "flex",
   flexDirection: "column",
   overflow: "hidden",
+  backgroundColor: "#f8fafc",
 };
 
 const scrollAreaStyle: React.CSSProperties = {
@@ -314,8 +424,9 @@ const scrollAreaStyle: React.CSSProperties = {
   width: "100%",
   maxWidth: 1100,
   margin: "0 auto",
-  fontFamily: "system-ui, -apple-system, BlinkMacSystemFont",
-  color: "white",
+  fontFamily:
+    "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+  color: "#0f172a",
 };
 
 const headerStyle: React.CSSProperties = {
@@ -340,14 +451,15 @@ const h2Style: React.CSSProperties = {
 
 const mutedTextStyle: React.CSSProperties = {
   fontSize: 14,
-  opacity: 0.8,
+  color: "#64748b",
 };
 
 const cardStyle: React.CSSProperties = {
-  background: "rgba(0,0,0,0.3)",
-  padding: 20,
-  borderRadius: 16,
-  border: "1px solid rgba(255,255,255,0.1)",
+  backgroundColor: "#ffffff",
+  padding: 24,
+  borderRadius: 24,
+  border: "1px solid #e2e8f0",
+  boxShadow: "0 20px 40px rgba(15, 23, 42, 0.08)",
 };
 
 const primaryButton: React.CSSProperties = {
@@ -355,12 +467,13 @@ const primaryButton: React.CSSProperties = {
   padding: "10px 16px",
   borderRadius: 999,
   border: "none",
-  background: "linear-gradient(135deg,#27b3ff,#3dffb3)",
-  color: "#000",
+  background: "linear-gradient(135deg, #0ea5e9 0%, #22c55e 50%, #6366f1 100%)",
+  color: "#ffffff",
   fontWeight: 600,
   textDecoration: "none",
   cursor: "pointer",
   fontSize: 14,
+  boxShadow: "0 10px 20px rgba(15, 23, 42, 0.25)",
 };
 
 const primaryButtonSmall: React.CSSProperties = {
@@ -373,9 +486,9 @@ const secondaryButton: React.CSSProperties = {
   display: "inline-block",
   padding: "8px 14px",
   borderRadius: 999,
-  border: "1px solid rgba(255,255,255,0.2)",
-  background: "transparent",
-  color: "white",
+  border: "1px solid #cbd5f5",
+  backgroundColor: "#ffffff",
+  color: "#0f172a",
   textDecoration: "none",
   cursor: "pointer",
   fontSize: 14,
@@ -388,10 +501,11 @@ const jobsGridStyle: React.CSSProperties = {
 };
 
 const jobCardStyle: React.CSSProperties = {
-  background: "rgba(0,0,0,0.3)",
-  padding: 16,
-  borderRadius: 16,
-  border: "1px solid rgba(255,255,255,0.1)",
+  backgroundColor: "#ffffff",
+  padding: 18,
+  borderRadius: 20,
+  border: "1px solid #e2e8f0",
+  boxShadow: "0 16px 30px rgba(15, 23, 42, 0.06)",
   display: "flex",
   flexDirection: "column",
   gap: 4,
@@ -400,7 +514,8 @@ const jobCardStyle: React.CSSProperties = {
 const chipStyle: React.CSSProperties = {
   padding: "4px 8px",
   borderRadius: 999,
-  border: "1px solid rgba(255,255,255,0.2)",
+  border: "1px solid #e2e8f0",
   fontSize: 11,
-  opacity: 0.9,
+  color: "#0f172a",
+  backgroundColor: "#f8fafc",
 };

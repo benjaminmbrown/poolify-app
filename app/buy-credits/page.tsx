@@ -1,97 +1,98 @@
-"use client"
+"use client";
 
-import * as React from "react"
-import { useAuth } from "@/components/AuthContext"
+import * as React from "react";
+import { useAuth } from "@/components/AuthContext";
 
-type Status = "checking-auth" | "no-user" | "loading-data" | "ready" | "error"
+type Status = "checking-auth" | "no-user" | "loading-data" | "ready" | "error";
 
 type CreditsResponse = {
-  credits?: number
-  error?: string
-}
+  credits?: number;
+  error?: string;
+};
 
+// ✅ Only change: priceId values now come from env
 const CREDIT_PACKS = [
   {
-    priceId: "price_1SYDbXD4euJjAUTF6xIyUelY",
+    priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_10!,
     label: "10 credits",
     description: "Great for trying Poolify or a couple of projects.",
     subtitle: "~2–3 full sets of designs",
   },
   {
-    priceId: "price_1SYDcrD4euJjAUTF1oR0bWsA",
+    priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_25!,
     label: "25 credits",
     description: "Ideal for planning a full backyard transformation.",
     subtitle: "~5–8 full sets of designs",
   },
   {
-    priceId: "price_1SYDdND4euJjAUTFzzRQYrpT",
+    priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_60!,
     label: "60 credits",
     description: "Best value for pros and serial planners.",
     subtitle: "Plenty of room to experiment",
   },
-]
+];
 
 export default function BuyCreditsPage() {
-  const auth = useAuth()
-  const userId = auth?.userId || null
-  const email = auth?.email || null
-  const authLoading = auth?.loading || false
+  const auth = useAuth();
+  const userId = auth?.userId || null;
+  const email = auth?.email || null;
+  const authLoading = auth?.loading || false;
 
-  const [status, setStatus] = React.useState<Status>("checking-auth")
-  const [credits, setCredits] = React.useState<number | null>(null)
-  const [errorMessage, setErrorMessage] = React.useState<string | null>(null)
-  const [busyPriceId, setBusyPriceId] = React.useState<string | null>(null)
+  const [status, setStatus] = React.useState<Status>("checking-auth");
+  const [credits, setCredits] = React.useState<number | null>(null);
+  const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
+  const [busyPriceId, setBusyPriceId] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    if (authLoading) return
+    if (authLoading) return;
 
     const boot = async () => {
-      setStatus("checking-auth")
-      setErrorMessage(null)
+      setStatus("checking-auth");
+      setErrorMessage(null);
 
       if (!userId) {
-        setStatus("no-user")
-        return
+        setStatus("no-user");
+        return;
       }
 
       try {
-        setStatus("loading-data")
+        setStatus("loading-data");
 
-        const params = new URLSearchParams({ user_id: userId })
+        const params = new URLSearchParams({ user_id: userId });
         if (email) {
-          params.set("email", email)
+          params.set("email", email);
         }
 
-        const res = await fetch(`/api/me/credits?${params.toString()}`)
-        const json: CreditsResponse = await res.json()
+        const res = await fetch(`/api/me/credits?${params.toString()}`);
+        const json: CreditsResponse = await res.json();
 
         if (!res.ok || json.error) {
-          throw new Error(json.error || res.statusText)
+          throw new Error(json.error || res.statusText);
         }
 
-        setCredits(json.credits !== undefined ? json.credits : 0)
-        setStatus("ready")
+        setCredits(json.credits !== undefined ? json.credits : 0);
+        setStatus("ready");
       } catch (e: any) {
-        console.error("BuyCredits boot error:", e)
+        console.error("BuyCredits boot error:", e);
         setErrorMessage(
           e?.message || "Unexpected error while loading your credits."
-        )
-        setStatus("error")
+        );
+        setStatus("error");
       }
-    }
+    };
 
-    boot()
-  }, [authLoading, userId, email])
+    boot();
+  }, [authLoading, userId, email]);
 
   const startCheckout = async (priceId: string) => {
     if (!userId) {
-      setErrorMessage("Please sign in to your account first.")
-      setStatus("no-user")
-      return
+      setErrorMessage("Please sign in to your account first.");
+      setStatus("no-user");
+      return;
     }
 
-    setBusyPriceId(priceId)
-    setErrorMessage(null)
+    setBusyPriceId(priceId);
+    setErrorMessage(null);
 
     try {
       const res = await fetch("/api/credits/create-checkout-session", {
@@ -103,26 +104,26 @@ export default function BuyCreditsPage() {
           user_id: userId,
           price_id: priceId,
         }),
-      })
+      });
 
-      const json = await res.json().catch(() => ({} as any))
+      const json = await res.json().catch(() => ({} as any));
 
       if (!res.ok || !json.url) {
         throw new Error(
           json.error || "Could not start checkout. Please try again."
-        )
+        );
       }
 
-      window.location.href = json.url
+      window.location.href = json.url;
     } catch (e: any) {
-      console.error("Checkout error:", e)
+      console.error("Checkout error:", e);
       setErrorMessage(
         e?.message || "Error starting checkout. Please try again."
-      )
+      );
     } finally {
-      setBusyPriceId(null)
+      setBusyPriceId(null);
     }
-  }
+  };
 
   // ----- Render states -----
 
@@ -133,7 +134,7 @@ export default function BuyCreditsPage() {
           <div style={cardStyle}>Loading your account…</div>
         </div>
       </div>
-    )
+    );
   }
 
   if (status === "no-user" || !userId) {
@@ -142,7 +143,7 @@ export default function BuyCreditsPage() {
         <div style={scrollAreaStyle}>
           <div style={cardStyle}>
             <h2 style={{ marginTop: 0 }}>Sign in to buy credits</h2>
-            <p style={{ fontSize: 14, opacity: 0.8 }}>
+            <p style={mutedTextStyle}>
               This page lets you add credits to your Poolify account. Go to the
               home page, log in or create an account, then come back here.
             </p>
@@ -152,7 +153,7 @@ export default function BuyCreditsPage() {
           </div>
         </div>
       </div>
-    )
+    );
   }
 
   if (status === "error") {
@@ -161,14 +162,14 @@ export default function BuyCreditsPage() {
         <div style={scrollAreaStyle}>
           <div style={cardStyle}>
             <h2 style={{ marginTop: 0 }}>Problem loading credits</h2>
-            <p style={{ color: "#ffb0b0", fontSize: 14 }}>{errorMessage}</p>
+            <p style={{ color: "#b91c1c", fontSize: 14 }}>{errorMessage}</p>
             <a href="/dashboard" style={secondaryButton}>
               Back to Dashboard
             </a>
           </div>
         </div>
       </div>
-    )
+    );
   }
 
   // READY
@@ -178,34 +179,20 @@ export default function BuyCreditsPage() {
       <div style={scrollAreaStyle}>
         <header style={headerStyle}>
           <div>
-            <h1 style={{ margin: 0 }}>Buy Credits</h1>
-            <p style={{ margin: 0, opacity: 0.8 }}>
-              Signed in as {email ?? "your account"}
-            </p>
+            <h1 style={h1Style}>Buy Credits</h1>
+            <p style={mutedTextStyle}>Signed in as {email ?? "your account"}</p>
           </div>
           <a href="/dashboard" style={secondaryButton}>
             Back to Dashboard
           </a>
         </header>
-
-        <section style={{ marginBottom: 24 }}>
-          <div style={cardStyle}>
-            <h3 style={{ marginTop: 0 }}>Current Balance</h3>
-            <p style={{ fontSize: 26, fontWeight: 600 }}>
-              {credits ?? 0} credits
-            </p>
-            <p style={{ fontSize: 13, opacity: 0.8 }}>
-              Credits are used whenever you generate new designs or request
-              additional variants.
-            </p>
-            {errorMessage && (
-              <p style={{ color: "#ffb0b0", fontSize: 13 }}>{errorMessage}</p>
-            )}
-          </div>
-        </section>
-
+        <div style={valuePropStyle}>
+          “Most pools cost between $60,000 and $120,000. A tiny credit purchase
+          now lets you explore designs, avoid expensive regrets, and arrive at a
+          layout you’ll love for decades.”
+        </div>
         <section>
-          <h2 style={{ marginBottom: 12 }}>Choose a pack</h2>
+          <h2 style={h2Style}>Choose a pack</h2>
           <div style={packsGridStyle}>
             {CREDIT_PACKS.map((pack) => (
               <div key={pack.priceId} style={packCardStyle}>
@@ -213,6 +200,7 @@ export default function BuyCreditsPage() {
                   style={{
                     fontWeight: 600,
                     marginBottom: 6,
+                    fontSize: 15,
                   }}
                 >
                   {pack.label}
@@ -220,7 +208,7 @@ export default function BuyCreditsPage() {
                 <div
                   style={{
                     fontSize: 13,
-                    opacity: 0.85,
+                    color: "#475569",
                     marginBottom: 4,
                   }}
                 >
@@ -229,7 +217,7 @@ export default function BuyCreditsPage() {
                 <div
                   style={{
                     fontSize: 12,
-                    opacity: 0.7,
+                    color: "#64748b",
                     marginBottom: 10,
                   }}
                 >
@@ -248,19 +236,36 @@ export default function BuyCreditsPage() {
             ))}
           </div>
         </section>
+        <section style={{ marginTop: 24 }}>
+          <div style={cardStyle}>
+            <h3 style={{ marginTop: 0, marginBottom: 8 }}>Current Balance</h3>
+            <p style={{ fontSize: 26, fontWeight: 600, margin: 0 }}>
+              {credits ?? 0} credits
+            </p>
+            <p style={{ fontSize: 13, color: "#64748b", marginTop: 8 }}>
+              Credits are used whenever you generate new designs or request
+              additional variants.
+            </p>
+            {errorMessage && (
+              <p style={{ color: "#b91c1c", fontSize: 13, marginTop: 8 }}>
+                {errorMessage}
+              </p>
+            )}
+          </div>
+        </section>
 
         <section style={{ marginTop: 28 }}>
-          <p style={{ fontSize: 12, opacity: 0.7 }}>
+          <p style={{ fontSize: 12, color: "#64748b" }}>
             Payments are processed securely by Stripe. Credits are added to your
             account automatically after checkout.
           </p>
         </section>
       </div>
     </div>
-  )
+  );
 }
 
-/* Layout + styles (same style language as Dashboard) */
+/* Layout + styles (light theme to match Dashboard/Homepage) */
 
 const outerStyle: React.CSSProperties = {
   position: "relative",
@@ -272,7 +277,11 @@ const outerStyle: React.CSSProperties = {
   display: "flex",
   flexDirection: "column",
   overflow: "hidden",
-}
+  backgroundColor: "#f8fafc",
+  color: "#0f172a",
+  fontFamily:
+    "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+};
 
 const scrollAreaStyle: React.CSSProperties = {
   flex: 1,
@@ -283,58 +292,87 @@ const scrollAreaStyle: React.CSSProperties = {
   width: "100%",
   maxWidth: 1100,
   margin: "0 auto",
-  fontFamily: "system-ui, -apple-system, BlinkMacSystemFont",
-  color: "white",
-}
+};
 
 const headerStyle: React.CSSProperties = {
   display: "flex",
   justifyContent: "space-between",
   alignItems: "center",
   marginBottom: 24,
-}
+  gap: 12,
+  flexWrap: "wrap",
+};
+
+const h1Style: React.CSSProperties = {
+  margin: 0,
+  fontSize: 26,
+};
+
+const h2Style: React.CSSProperties = {
+  marginTop: 0,
+  marginBottom: 12,
+  fontSize: 18,
+};
+
+const mutedTextStyle: React.CSSProperties = {
+  fontSize: 14,
+  color: "#64748b",
+};
 
 const cardStyle: React.CSSProperties = {
-  background: "rgba(0,0,0,0.3)",
-  padding: 20,
-  borderRadius: 16,
-  border: "1px solid rgba(255,255,255,0.1)",
-}
+  backgroundColor: "#ffffff",
+  padding: 24,
+  borderRadius: 24,
+  border: "1px solid #e2e8f0",
+  boxShadow: "0 20px 40px rgba(15, 23, 42, 0.08)",
+};
 
 const primaryButton: React.CSSProperties = {
   display: "inline-block",
   padding: "10px 16px",
   borderRadius: 999,
   border: "none",
-  background: "linear-gradient(135deg,#27b3ff,#3dffb3)",
-  color: "#000",
+  background: "linear-gradient(135deg, #0ea5e9 0%, #22c55e 50%, #6366f1 100%)",
+  color: "#ffffff",
   fontWeight: 600,
   textDecoration: "none",
   cursor: "pointer",
   fontSize: 14,
-}
+  boxShadow: "0 10px 20px rgba(15, 23, 42, 0.25)",
+};
 
 const secondaryButton: React.CSSProperties = {
   display: "inline-block",
   padding: "8px 14px",
   borderRadius: 999,
-  border: "1px solid rgba(255,255,255,0.2)",
-  background: "transparent",
-  color: "white",
+  border: "1px solid #cbd5f5",
+  backgroundColor: "#ffffff",
+  color: "#0f172a",
   textDecoration: "none",
   cursor: "pointer",
   fontSize: 14,
-}
+};
 
 const packsGridStyle: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
   gap: 16,
-}
+};
 
 const packCardStyle: React.CSSProperties = {
-  background: "rgba(0,0,0,0.3)",
+  backgroundColor: "#ffffff",
   padding: 18,
-  borderRadius: 16,
-  border: "1px solid rgba(255,255,255,0.1)",
-}
+  borderRadius: 20,
+  border: "1px solid #e2e8f0",
+  boxShadow: "0 16px 30px rgba(15, 23, 42, 0.06)",
+  display: "flex",
+  flexDirection: "column",
+  gap: 4,
+};
+const valuePropStyle: React.CSSProperties = {
+  fontSize: 26,
+  fontWeight: 700,
+  color: "#0f172a",
+  marginBottom: 24,
+  lineHeight: 1.25,
+};
