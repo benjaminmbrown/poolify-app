@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useAuth } from "@/components/AuthContext";
 import { CreditsOverviewPanel } from "@/components/CreditsOverviewPanel";
-import { CouponRedeemer } from "@/components/CouponRedeemer";
+import CouponRedeemer from "@/components/CouponRedeemer";
 
 const JOBS_PAGE_SIZE = 20;
 
