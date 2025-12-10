@@ -4,25 +4,6 @@ import AuthPanel from "@/components/AuthPanel";
 export default function Home() {
   return (
     <>
-      {/* Google Analytics (GA4) */}
-      <Script
-        src={`https://www.googletagmanager.com/gtag/js?id=${process.env.NEXT_PUBLIC_GA_ID}`}
-        strategy="afterInteractive"
-      />
-      <Script
-        id="ga4-init"
-        strategy="afterInteractive"
-      >
-        {`
-          window.dataLayer = window.dataLayer || [];
-          function gtag(){dataLayer.push(arguments);}
-          gtag('js', new Date());
-          gtag('config', '${process.env.NEXT_PUBLIC_GA_ID}', {
-            page_path: window.location.pathname,
-          });
-        `}
-      </Script>
-
       <main
         style={{
           position: "relative",
