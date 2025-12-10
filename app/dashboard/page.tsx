@@ -2,11 +2,17 @@
 
 import * as React from "react";
 import { useAuth } from "@/components/AuthContext";
-import { CreditsOverviewPanel } from "@/components/CreditsOverviewPanel"; // 👈 NEW
+import { CreditsOverviewPanel } from "@/components/CreditsOverviewPanel";
+import { CouponRedeemer } from "@/components/CouponRedeemer";
 
 const JOBS_PAGE_SIZE = 20;
 
 type Status = "checking-auth" | "no-user" | "loading" | "ready" | "error";
+
+type CouponRedeemerProps = {
+  apiBase: string;
+  onCreditsUpdated?: (newCredits: number) => void;
+};
 
 type JobSummary = {
   id: string;
@@ -53,6 +59,7 @@ export default function DashboardPage() {
   const [jobsLoadingMore, setJobsLoadingMore] = React.useState(false);
 
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
+  const API_BASE = "https://poolify-backend-production.up.railway.app";
 
   const fetchJobsPage = React.useCallback(
     async (offset: number, append: boolean) => {
@@ -236,6 +243,11 @@ export default function DashboardPage() {
         {/* 👇 NEW: Credits overview panel right under header */}
         <section style={{ marginBottom: 24 }}>
           <CreditsOverviewPanel />
+
+          <CouponRedeemer
+            apiBase={API_BASE}
+            onCreditsUpdated={(newCredits: number) => setCredits(newCredits)}
+          />
         </section>
 
         <section>
