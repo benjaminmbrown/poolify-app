@@ -28,14 +28,9 @@ type Job = {
 type JobImage = {
   id: string;
   job_id: string;
-
-  // Full-resolution image
   image_url: string;
-
-  // low-res thumbnail URL (optional so it won't break existing data)
   thumbnail_url?: string | null;
-
-  created_at?: string | null;
+  featured_in_showcase?: boolean | null;
 };
 
 type GalleryResponse = {
@@ -98,6 +93,10 @@ export default function GalleryPage() {
   const [insufficientCredits, setInsufficientCredits] =
     React.useState<InsufficientCreditsInfo | null>(null);
 
+  // ⭐ NEW: feature toggle state / errors
+  const [featureBusyId, setFeatureBusyId] = React.useState<string | null>(null);
+  const [featureError, setFeatureError] = React.useState<string | null>(null);
+
   const {
     credits,
     loading: creditsLoading,
@@ -158,6 +157,77 @@ export default function GalleryPage() {
       console.log("Analytics failed:", err);
     }
   }
+
+  // ⭐ NEW: toggle featured image for public website gallery
+  const handleToggleFeatured = async (img: JobImage) => {
+    if (!job || !job.id) {
+      setFeatureError("Missing job information.");
+      return;
+    }
+    if (!authUserId) {
+      setFeatureError("Log in to your Poolify account to feature designs.");
+      return;
+    }
+    // soft client-side guard; backend will re-check ownership
+    if (job.user_id && job.user_id !== authUserId) {
+      setFeatureError(
+        "This gallery belongs to a different account. Please log in with the email/account you used for this project."
+      );
+      return;
+    }
+
+    const newFeatured = !img.featured_in_showcase;
+    setFeatureBusyId(img.id);
+    setFeatureError(null);
+
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/jobs/${job.id}/feature-image`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            user_id: authUserId,
+            image_id: img.id,
+            featured: newFeatured,
+          }),
+        }
+      );
+
+      const json = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(json?.error || `HTTP ${res.status} ${res.statusText}`);
+      }
+
+      // Keep local state in sync:
+      // - if we just featured this image, clear featured flag on others in this job
+      // - if we un-featured it, others stay as they are
+      setImages((prev) =>
+        (prev || []).map((image) => {
+          if (image.id === img.id) {
+            return { ...image, featured_in_showcase: newFeatured };
+          }
+          if (newFeatured && image.job_id === img.job_id) {
+            return { ...image, featured_in_showcase: false };
+          }
+          return image;
+        })
+      );
+
+      trackEvent("toggle_featured_image", {
+        image_id: img.id,
+        job_id: img.job_id,
+        featured: newFeatured,
+      });
+    } catch (e: any) {
+      console.error("Feature toggle error:", e);
+      setFeatureError(
+        e?.message || "Could not update whether this design is featured."
+      );
+    } finally {
+      setFeatureBusyId(null);
+    }
+  };
 
   // Basic states
   if (loading) {
@@ -470,7 +540,11 @@ url:   ${debugUrl ?? "null"}`}
           <a
             href="/start"
             onClick={() => trackEvent("click_create_new_gallery", {})}
-            style={{ fontSize: 13, textDecoration: "underline", color: "#0f172a" }}
+            style={{
+              fontSize: 13,
+              textDecoration: "underline",
+              color: "#0f172a",
+            }}
           >
             Create new gallery
           </a>
@@ -578,15 +652,6 @@ url:   ${debugUrl ?? "null"}`}
                       >
                         View full size
                       </button>
-                      {/* <button
-                        style={smallButtonStyle}
-                        onClick={() => handleDownload(img)}
-                        disabled={downloadBusyImageId === img.id}
-                      >
-                        {downloadBusyImageId === img.id
-                          ? "Downloading…"
-                          : "Download"}
-                      </button> */}
                       {canRequestVariants ? (
                         <button
                           style={primarySmallButtonStyle}
@@ -605,6 +670,35 @@ url:   ${debugUrl ?? "null"}`}
                           designs.
                         </span>
                       )}
+
+                      {/* ⭐ Feature toggle button */}
+                      <button
+                        style={{
+                          ...smallButtonStyle,
+                          border: img.featured_in_showcase
+                            ? "none"
+                            : "1px solid #cbd5f5",
+                          backgroundColor: img.featured_in_showcase
+                            ? "#0ea5e9"
+                            : "#ffffff",
+                          color: img.featured_in_showcase
+                            ? "#ffffff"
+                            : "#0f172a",
+                        }}
+                        onClick={() => handleToggleFeatured(img)}
+                        disabled={featureBusyId === img.id}
+                        title={
+                          img.featured_in_showcase
+                            ? "Remove from public website gallery"
+                            : "Feature this design on the public website gallery"
+                        }
+                      >
+                        {featureBusyId === img.id
+                          ? "Saving…"
+                          : img.featured_in_showcase
+                          ? "★ Featured"
+                          : "☆ Feature"}
+                      </button>
                     </div>
                   </div>
                 </figcaption>
@@ -613,6 +707,21 @@ url:   ${debugUrl ?? "null"}`}
           </div>
         )}
       </section>
+
+      {/* Feature error block */}
+      {featureError && (
+        <section style={{ ...cardStyle, marginTop: 16 }}>
+          <p
+            style={{
+              margin: 0,
+              fontSize: 13,
+              color: "#b91c1c",
+            }}
+          >
+            {featureError}
+          </p>
+        </section>
+      )}
 
       {/* Download error / upsell block */}
       {(downloadError || downloadInsufficient) && (
@@ -708,11 +817,13 @@ images: ${images.length}`}
                 margin: "0 0 10px",
               }}
             >
-              High resolution/full size downloads cost <strong>1 credit</strong>.<br/>
+              High resolution/full size downloads cost{" "}
+              <strong>1 credit</strong>.
+              <br />
               {typeof credits === "number" && (
                 <>
                   {" "}
-                You currently have <strong>{credits} credits</strong> .{" "}
+                  You currently have <strong>{credits} credits</strong>.{" "}
                 </>
               )}
               <a
@@ -863,8 +974,7 @@ images: ${images.length}`}
               >
                 <p style={{ marginBottom: 6 }}>
                   You need <strong>{insufficientCredits.needed}</strong> credits
-                  but only have <strong>{insufficientCredits.remaining}</strong>
-                  .
+                  but only have <strong>{insufficientCredits.remaining}</strong>.
                 </p>
 
                 {authUserId ? (
