@@ -1,110 +1,125 @@
-"use client"
+"use client";
 
-import * as React from "react"
-import { supabase } from "@/lib/supabaseClient"
-import { useAuth } from "@/components/AuthContext"
+import * as React from "react";
+import { supabase } from "@/lib/supabaseClient";
+import { useAuth } from "@/components/AuthContext";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE!
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE!;
 
 export default function AuthPanel() {
-  const auth = useAuth()
-  const user = auth?.user || null
+  const auth = useAuth();
+  const user = auth?.user || null;
 
-  const [mode, setMode] = React.useState<"signup" | "login">("signup")
-  const [email, setEmail] = React.useState("")
-  const [password, setPassword] = React.useState("")
-  const [error, setError] = React.useState("")
-  const [success, setSuccess] = React.useState("")
+  const [mode, setMode] = React.useState<"signup" | "login">("signup");
+  const [email, setEmail] = React.useState("");
+  const [password, setPassword] = React.useState("");
+  const [acceptedTerms, setAcceptedTerms] = React.useState(false);
+  const [error, setError] = React.useState("");
+  const [success, setSuccess] = React.useState("");
 
   function redirectToDashboard() {
-    window.location.href = "/dashboard"
+    window.location.href = "/dashboard";
   }
 
   async function claimJobs(userId: string, email: string) {
     try {
       await fetch(`${API_BASE}/auth/claim-jobs`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ user_id: userId, email }),
-      })
+      });
     } catch (e) {
-      console.error("Error claiming jobs:", e)
+      console.error("Error claiming jobs:", e);
     }
   }
 
-async function handleLogin() {
-  setError("")
-  setSuccess("")
+  // ---------------------
+  // LOGIN
+  // ---------------------
+  async function handleLogin() {
+    setError("");
+    setSuccess("");
 
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email,
-    password,
-  })
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
 
-  console.log("login result", { data, error })
+    if (error) {
+      setError(error.message);
+      return;
+    }
 
-  if (error) {
-    // This will show Supabase's exact message, not just "400"
-    setError(error.message)
-    return
+    const userId = data?.user?.id || null;
+    if (userId) {
+      await claimJobs(userId, email);
+      setSuccess("Logged in — redirecting to your dashboard...");
+      redirectToDashboard();
+    }
   }
 
-  const userId = data?.user?.id || null
-  if (userId) {
-    await claimJobs(userId, email)
-    setSuccess("Logged in — redirecting to your dashboard...")
-    redirectToDashboard()
-  } else {
-    setSuccess("Logged in.")
-  }
-}
-
+  // ---------------------
+  // SIGNUP
+  // ---------------------
   async function handleSignUp() {
-    setError("")
-    setSuccess("")
+    setError("");
+    setSuccess("");
+
+    if (!acceptedTerms) {
+      setError("You must accept the Terms & Conditions to create an account.");
+      return;
+    }
 
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-    })
+    });
 
     if (error) {
-      setError(error.message)
-      return
+      setError(error.message);
+      return;
     }
 
-    const newUserId = data?.user?.id || null
+    const newUserId = data?.user?.id || null;
+
+    // Store terms acceptance in user_profiles
+    if (newUserId) {
+      await supabase
+        .from("user_profiles")
+        .update({
+          terms_accepted: true,
+          terms_accepted_at: new Date().toISOString(),
+        })
+        .eq("id", newUserId);
+    }
 
     if (data?.session && newUserId) {
-      await claimJobs(newUserId, email)
-      setSuccess("Account created — redirecting to your dashboard...")
-      redirectToDashboard()
+      await claimJobs(newUserId, email);
+      setSuccess("Account created — redirecting to your dashboard...");
+      redirectToDashboard();
     } else {
-      setSuccess("Account created — please check your email to confirm.")
+      setSuccess("Account created — please check your email to confirm.");
     }
   }
 
+  // ---------------------
+  // LOGOUT
+  // ---------------------
   async function handleLogout() {
-    await supabase.auth.signOut()
+    await supabase.auth.signOut();
   }
 
-  // Logged in view
+  // ---------------------
+  // LOGGED IN VIEW
+  // ---------------------
   if (user) {
     return (
-      <div
-        style={{
-          padding: 16,
-          borderRadius: 12,
-          border: "1px solid #eee",
-          maxWidth: 360,
-        }}
-      >
+      <div style={{ padding: 16, borderRadius: 12, border: "1px solid #eee", maxWidth: 360 }}>
         <div style={{ marginBottom: 8, fontWeight: 600 }}>Account</div>
         <div style={{ marginBottom: 12 }}>
           Logged in as <strong>{user.email}</strong>
         </div>
+
         <button
           onClick={handleLogout}
           style={{
@@ -119,6 +134,7 @@ async function handleLogin() {
         >
           Log Out
         </button>
+
         <button
           onClick={redirectToDashboard}
           style={{
@@ -135,10 +151,10 @@ async function handleLogin() {
           Go to Dashboard
         </button>
       </div>
-    )
+    );
   }
 
-  const isLogin = mode === "login"
+  const isLogin = mode === "login";
 
   return (
     <div
@@ -153,6 +169,7 @@ async function handleLogin() {
         {isLogin ? "Log In" : "Create an Account"}
       </div>
 
+      {/* EMAIL */}
       <input
         style={{
           width: "100%",
@@ -162,8 +179,11 @@ async function handleLogin() {
           border: "1px solid #ccc",
         }}
         placeholder="Email"
+        type="email"
         onChange={(e) => setEmail(e.target.value)}
       />
+
+      {/* PASSWORD */}
       <input
         style={{
           width: "100%",
@@ -177,6 +197,36 @@ async function handleLogin() {
         onChange={(e) => setPassword(e.target.value)}
       />
 
+      {/* TERMS CHECKBOX — Only shown during signup */}
+      {!isLogin && (
+        <label
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            fontSize: 12,
+            marginBottom: 12,
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={acceptedTerms}
+            onChange={(e) => setAcceptedTerms(e.target.checked)}
+            style={{ cursor: "pointer" }}
+          />
+          I agree to the{" "}
+          <a
+            href="/terms"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ color: "#0b6cff" }}
+          >
+            Terms & Conditions
+          </a>
+        </label>
+      )}
+
+      {/* SUBMIT BUTTON */}
       <button
         onClick={isLogin ? handleLogin : handleSignUp}
         style={{
@@ -192,6 +242,7 @@ async function handleLogin() {
         {isLogin ? "Log In" : "Sign Up"}
       </button>
 
+      {/* SUCCESS / ERROR */}
       {error && (
         <div style={{ color: "red", marginTop: 8, fontSize: 12 }}>{error}</div>
       )}
@@ -201,6 +252,7 @@ async function handleLogin() {
         </div>
       )}
 
+      {/* MODE SWITCH */}
       <div style={{ marginTop: 12, fontSize: 12 }}>
         {isLogin ? (
           <>
@@ -214,9 +266,9 @@ async function handleLogin() {
                 padding: 0,
               }}
               onClick={() => {
-                setMode("signup")
-                setError("")
-                setSuccess("")
+                setMode("signup");
+                setError("");
+                setSuccess("");
               }}
             >
               Sign up
@@ -234,9 +286,9 @@ async function handleLogin() {
                 padding: 0,
               }}
               onClick={() => {
-                setMode("login")
-                setError("")
-                setSuccess("")
+                setMode("login");
+                setError("");
+                setSuccess("");
               }}
             >
               Log in
@@ -245,5 +297,5 @@ async function handleLogin() {
         )}
       </div>
     </div>
-  )
+  );
 }
