@@ -16,6 +16,8 @@ export default function AuthPanel() {
   const [acceptedTerms, setAcceptedTerms] = React.useState(false);
   const [error, setError] = React.useState("");
   const [success, setSuccess] = React.useState("");
+  const [marketingConsent, setMarketingConsent] = React.useState(false);
+  const [savingConsent, setSavingConsent] = React.useState(false);
 
   function redirectToDashboard() {
     window.location.href = "/dashboard";
@@ -30,6 +32,26 @@ export default function AuthPanel() {
       });
     } catch (e) {
       console.error("Error claiming jobs:", e);
+    }
+  }
+
+  async function saveMarketingConsent(userId: string, consent: boolean) {
+    setSavingConsent(true);
+    try {
+      await fetch(`${API_BASE}/me/marketing-consent`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: userId,
+          email: email.trim(), // ✅ add this
+          marketing_consent: marketingConsent,
+          source: "authpanel:signup:v1",
+        }),
+      });
+    } catch (e) {
+      console.error("Error saving marketing consent:", e);
+    } finally {
+      setSavingConsent(false);
     }
   }
 
@@ -84,15 +106,24 @@ export default function AuthPanel() {
 
     // Store terms acceptance in user_profiles
     if (newUserId) {
-      await supabase
-        .from("user_profiles")
-        .update({
+      const res = await fetch(`${API_BASE}/auth/post-signup`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: newUserId,
+          email: email.trim(),
           terms_accepted: true,
-          terms_accepted_at: new Date().toISOString(),
-        })
-        .eq("id", newUserId);
-    }
+          marketing_consent: marketingConsent, // same as checkbox
+          source: "authpanel:signup:v1",
+        }),
+      });
 
+      const json = await res.json().catch(() => null);
+      if (!res.ok) {
+        setError(json?.error || "Failed to finalize signup profile.");
+        return;
+      }
+    }
     if (data?.session && newUserId) {
       await claimJobs(newUserId, email);
       setSuccess("Account created — redirecting to your dashboard...");
@@ -114,7 +145,14 @@ export default function AuthPanel() {
   // ---------------------
   if (user) {
     return (
-      <div style={{ padding: 16, borderRadius: 12, border: "1px solid #eee", maxWidth: 360 }}>
+      <div
+        style={{
+          padding: 16,
+          borderRadius: 12,
+          border: "1px solid #eee",
+          maxWidth: 360,
+        }}
+      >
         <div style={{ marginBottom: 8, fontWeight: 600 }}>Account</div>
         <div style={{ marginBottom: 12 }}>
           Logged in as <strong>{user.email}</strong>
@@ -198,31 +236,42 @@ export default function AuthPanel() {
       />
 
       {/* TERMS CHECKBOX — Only shown during signup */}
+      {/* MARKETING CONSENT — Only shown during signup */}
       {!isLogin && (
         <label
           style={{
             display: "flex",
-            alignItems: "center",
+            alignItems: "flex-start",
             gap: 8,
             fontSize: 12,
             marginBottom: 12,
+            lineHeight: 1.3,
           }}
         >
           <input
             type="checkbox"
-            checked={acceptedTerms}
-            onChange={(e) => setAcceptedTerms(e.target.checked)}
-            style={{ cursor: "pointer" }}
+            checked={acceptedTerms} // IMPORTANT: bind to acceptedTerms
+            onChange={(e) => {
+              const checked = e.target.checked;
+              setAcceptedTerms(checked);
+              setMarketingConsent(checked); // consent matches the same box
+              if (checked) setError(""); // clears the "must accept" warning immediately
+            }}
+            style={{ cursor: "pointer", marginTop: 2 }}
           />
-          I agree to the{" "}
-          <a
-            href="/terms"
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{ color: "#0b6cff" }}
-          >
-            Terms & Conditions
-          </a>
+          <span>
+            I agree to the{" "}
+            <a
+              href="/terms"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: "#0b6cff" }}
+            >
+              Terms & Conditions
+            </a>{" "}
+            and consent to the use of my photos and generated designs for
+            Poolify marketing.
+          </span>
         </label>
       )}
 
